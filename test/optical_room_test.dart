@@ -1,3 +1,4 @@
+import 'package:dark_port/drafting_theme.dart';
 import 'package:dark_port/main.dart';
 import 'package:dark_port/optical_bay.dart';
 import 'package:dark_port/optical_deck.dart';
@@ -59,6 +60,16 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.byType(OpticalDeck), findsNothing);
       await tester.tap(row(firstReflection));
+      await tester.pumpAndSettle();
+      expect(find.text(firstReflection.goal).hitTestable(), findsOneWidget);
+      final guide = find.byKey(const ValueKey('lesson-guide'));
+      final frame = find.byWidgetPredicate(
+        (widget) =>
+            widget is CustomPaint && widget.painter is DraftingSheetFrame,
+      );
+      expect(tester.getRect(frame).overlaps(tester.getRect(guide)), isTrue);
+      expect(find.byKey(const ValueKey('puzzle-objective')), findsOneWidget);
+      await tapText('Start lesson');
       await tester.pumpAndSettle();
       expect(
         tester.widget<PuzzleConsole>(find.byType(PuzzleConsole)).brief.title,
@@ -138,6 +149,8 @@ void main() {
 
       await tester.tap(row(dividedBeam));
       await tester.pumpAndSettle();
+      await tapText('Start lesson');
+      await tester.pumpAndSettle();
       await rotate('S1');
       await tester.tap(find.byTooltip('Back to tutorial'));
       await tester.pumpAndSettle();
@@ -170,6 +183,8 @@ void main() {
       expect(puzzleAnnouncement, findsNothing);
       await tester.ensureVisible(find.text('Next lesson'));
       await tester.tap(find.text('Next lesson'));
+      await tester.pumpAndSettle();
+      await tapText('Start lesson');
       await tester.pumpAndSettle();
 
       expect(

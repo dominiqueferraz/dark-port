@@ -37,6 +37,7 @@ Future<void> playTutorial(
   Future<void> pressIcon(String label) => tap(find.byTooltip(label));
   final advance = find.byKey(const ValueKey('lesson-advance'));
   final complete = find.byKey(const ValueKey('lesson-complete'));
+  final guide = find.byKey(const ValueKey('lesson-guide'));
 
   Finder row(TutorialLesson lesson) =>
       find.byKey(ValueKey('lesson-${lesson.id}'));
@@ -123,6 +124,62 @@ Future<void> playTutorial(
   }
 
   Future<void> capturePhase(TutorialLesson lesson) async {
+    expect(guide, findsOneWidget);
+    final bounds = tester.getRect(guide);
+    final frame = find.ancestor(
+      of: guide,
+      matching: find.byWidgetPredicate(
+        (widget) =>
+            widget is CustomPaint && widget.painter is DraftingSheetFrame,
+      ),
+    );
+    expectFits(
+      guide,
+      tester.getRect(frame).deflate(DraftingSheetFrame.frameEdge + 7),
+    );
+    final boardBounds = tester.getRect(viewport);
+    final readingsBounds = tester.getRect(readings);
+    expect(bounds.overlaps(boardBounds), isTrue);
+    expect(bounds.overlaps(readingsBounds), isTrue);
+    expect(bounds.right, lessThan(readingsBounds.right));
+    final goal = find.descendant(of: guide, matching: find.text(lesson.goal));
+    final title = find.descendant(of: guide, matching: find.text(lesson.title));
+    expect(goal.hitTestable(at: const Alignment(0, -.85)), findsOneWidget);
+    final goalSize = tester.widget<Text>(goal).style!.fontSize!;
+    expect(goalSize, greaterThan(tester.widget<Text>(title).style!.fontSize!));
+    final dividers = find.descendant(of: guide, matching: find.byType(Divider));
+    expect(dividers, findsNWidgets(lesson.notes.length));
+    final goalRule = tester.getRect(dividers.first);
+    expect(goalRule.left, closeTo(bounds.left, .01));
+    expect(goalRule.right, closeTo(bounds.right, .01));
+    final goalBounds = tester.getRect(goal);
+    final ruleThickness = tester.widget<Divider>(dividers.first).thickness!;
+    expect(
+      goalBounds.top - tester.getRect(title).bottom,
+      closeTo(goalRule.center.dy - ruleThickness / 2 - goalBounds.bottom, .01),
+    );
+    for (var index = 1; index < lesson.notes.length; index++) {
+      expect(
+        tester.getSize(dividers.at(index)).width,
+        lessThan(bounds.width / 4),
+      );
+    }
+    for (final note in lesson.notes) {
+      final phrase = find.descendant(of: guide, matching: find.text(note));
+      expect(phrase, findsOneWidget);
+      expect(
+        goalSize,
+        greaterThan(tester.widget<Text>(phrase).style!.fontSize!),
+      );
+      await tester.ensureVisible(phrase);
+      expect(phrase.hitTestable(at: const Alignment(0, .85)), findsOneWidget);
+    }
+    expect(advance, findsNothing);
+    expect((await store.load())!.opened, contains(lesson.id));
+    await press('Start lesson');
+    expect(guide, findsNothing);
+    expect(tester.getRect(viewport), boardBounds);
+    expect(tester.getRect(readings), readingsBounds);
     final board = find.byKey(
       ValueKey(lesson is OpticalLesson ? 'optical-deck' : 'signal-playfield'),
     );
@@ -159,9 +216,9 @@ Future<void> playTutorial(
     expect(tester.getRect(board).right, lessThan(pane.left));
     expectFits(find.byTooltip('Reset room'), screen);
     expectFits(find.text(lesson.objective), pane);
-    final title = find.byType(DraftingTitleBlock);
-    expectFits(title, screen);
-    expect(find.ancestor(of: title, matching: details), findsNothing);
+    final titleBlock = find.byType(DraftingTitleBlock);
+    expectFits(titleBlock, screen);
+    expect(find.ancestor(of: titleBlock, matching: details), findsNothing);
     expectFits(find.byType(DraftingPartRow).first, tester.getRect(readings));
     expectFits(find.byTooltip('Hint'), screen);
     expect(find.text(lesson.goal), findsNothing);
@@ -191,6 +248,11 @@ Future<void> playTutorial(
   await capture('qa-tutorial-start');
   await open(firstReflection);
   await capturePhase(firstReflection);
+  expect((await store.load())!.boards, isEmpty);
+  await relaunch();
+  await press('Continue game');
+  await open(firstReflection);
+  expect(guide, findsNothing);
   await pressIcon('Hint');
   expect(find.text(firstReflection.goal).hitTestable(), findsOneWidget);
   await pressIcon('Close hint');
@@ -241,6 +303,7 @@ Future<void> playTutorial(
   await relaunch();
   await press('Continue game');
   await open(opticalInterlock);
+  expect(guide, findsNothing);
   expect(
     find.text('Alarm line interrupted. Reset the room to try again.'),
     findsOneWidget,
@@ -754,9 +817,23 @@ Future<void> playTutorial(
   await press('Continue game');
   expect(find.text('ALL SHEETS APPROVED'), findsOneWidget);
   await open(testLine);
+  expect(guide, findsNothing);
   expectGoal('recorder', '0/90–110', 'No signal');
   expect((await currentSave()).solved, isTrue);
   expect(puzzleAnnouncement, findsNothing);
   await dragPart('beacon', 1, 1);
   expect((await currentSave()).positions, solved.positions);
+
+  await back();
+  await pressIcon('Return to title');
+  await press('New game');
+  await tap(
+    find.descendant(
+      of: find.byType(AlertDialog),
+      matching: find.text('New game'),
+    ),
+  );
+  await open(firstReflection);
+  expect(guide, findsNothing);
+  expect((await store.load())!.completed, isEmpty);
 }

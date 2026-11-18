@@ -7,6 +7,7 @@ import 'drafting_controls.dart';
 import 'drafting_grid.dart';
 import 'drafting_theme.dart';
 import 'endless_levels.dart';
+import 'lesson_guide.dart';
 import 'settings_screen.dart';
 import 'sheet_style.dart';
 import 'solution_stars.dart';
@@ -47,12 +48,14 @@ class PuzzleNavigation {
     required this.backLabel,
     required this.onBack,
     this.backIcon = Icons.arrow_back,
+    this.onStartLesson,
     this.advance,
   });
 
   final String backLabel;
   final VoidCallback onBack;
   final IconData backIcon;
+  final VoidCallback? onStartLesson;
   final ({String label, IconData icon, VoidCallback onPressed})? advance;
 }
 
@@ -88,23 +91,41 @@ class PuzzleConsole extends StatelessWidget {
   static const _awardSize = 16.0;
   static const _awardInset = 4.0;
   static const _awardCell = _awardSize + 2 * _awardInset;
+  static const _blueprintFlex = 7;
+  static const _infoFlex = 3;
   // Seven toolbar buttons have room for their icons and the ruled dividers.
   static const _minSettingsToolbarWidth = 232.0;
 
   @override
-  Widget build(BuildContext context) => DraftingScaffold(
-    balanceVerticalInsets: true,
-    child: Semantics(
-      container: true,
-      explicitChildNodes: true,
-      label: brief.title,
-      child: LayoutBuilder(
-        builder: (context, constraints) => useConsoleColumns(constraints)
-            ? _wideLayout(context)
-            : _stackedLayout(context),
+  Widget build(BuildContext context) {
+    final startLesson = navigation.onStartLesson;
+    final guide = startLesson == null
+        ? null
+        : LessonGuide(
+            key: const ValueKey('lesson-guide'),
+            title: brief.title,
+            goal: brief.goal,
+            notes: brief.notes,
+            onStart: startLesson,
+          );
+    return DraftingScaffold(
+      balanceVerticalInsets: true,
+      child: Semantics(
+        container: true,
+        explicitChildNodes: true,
+        label: guide == null ? brief.title : null,
+        child: LayoutBuilder(
+          builder: (context, constraints) => useConsoleColumns(constraints)
+              ? _wideLayout(context, guide)
+              : _withGuide(
+                  console: _stackedLayout(context),
+                  guide: guide,
+                  wide: false,
+                ),
+        ),
       ),
-    ),
-  );
+    );
+  }
 
   Widget _stackedLayout(BuildContext context) => Align(
     alignment: Alignment.topCenter,
@@ -148,16 +169,19 @@ class PuzzleConsole extends StatelessWidget {
     ),
   );
 
-  Widget _wideLayout(BuildContext context) {
+  double _controlWidth(BuildContext context, double width) {
+    final available = width - DraftingSheetFrame.panelGap;
+    final reservedWidth = available * _infoFlex / (_blueprintFlex + _infoFlex);
+    return SheetLook.changerOf(context) == null
+        ? reservedWidth
+        : math.max(reservedWidth, _minSettingsToolbarWidth);
+  }
+
+  Widget _wideLayout(BuildContext context, Widget? guide) {
     return DraftingSheet(
       child: LayoutBuilder(
-        builder: (context, constraints) {
-          final available = constraints.maxWidth - DraftingSheetFrame.panelGap;
-          final reservedWidth = available * .3;
-          final controlWidth = SheetLook.changerOf(context) == null
-              ? reservedWidth
-              : math.max(reservedWidth, _minSettingsToolbarWidth);
-          return Row(
+        builder: (context, constraints) => _withGuide(
+          console: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Expanded(
@@ -167,13 +191,70 @@ class PuzzleConsole extends StatelessWidget {
                 ),
               ),
               const SizedBox(width: DraftingSheetFrame.panelGap),
-              SizedBox(width: controlWidth, child: _wideControls(context)),
+              SizedBox(
+                width: _controlWidth(context, constraints.maxWidth),
+                child: _wideControls(context),
+              ),
             ],
-          );
-        },
+          ),
+          guide: guide,
+          wide: true,
+        ),
       ),
     );
   }
+
+  Widget _withGuide({
+    required Widget console,
+    required Widget? guide,
+    required bool wide,
+  }) => Stack(
+    fit: StackFit.passthrough,
+    children: [
+      ExcludeSemantics(
+        excluding: guide != null,
+        child: ExcludeFocus(
+          excluding: guide != null,
+          child: AbsorbPointer(absorbing: guide != null, child: console),
+        ),
+      ),
+      if (guide != null)
+        Positioned.fill(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final available = constraints.maxWidth;
+              final width = math.min(366.0, available * (wide ? .63 : .88));
+              final gap = DraftingSheetFrame.panelGap;
+              final seam =
+                  available - _controlWidth(context, available) - gap / 2;
+              // Leave more of the narrower info column visible.
+              final left = wide ? seam - width * .64 : (available - width) / 2;
+              return Padding(
+                padding: EdgeInsets.fromLTRB(
+                  left,
+                  18,
+                  available - left - width,
+                  18,
+                ),
+                child: Center(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      // A strip of paper breaks the lines behind the card border.
+                      color: context.sheet.paper,
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(5),
+                      child: guide,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+    ],
+  );
 
   Widget _wideControls(BuildContext context) => Padding(
     padding: EdgeInsets.only(top: draftingGridMargins.top),

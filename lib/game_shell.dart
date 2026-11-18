@@ -37,6 +37,7 @@ class _GameShellState extends State<GameShell> {
   TutorialProgress? _progress;
   GameSave? _board;
   bool _replaying = false;
+  bool _showLessonGuide = false;
   bool _loading = true;
   bool _title = true;
   bool _endless = false;
@@ -226,11 +227,15 @@ class _GameShellState extends State<GameShell> {
       _progress = progress;
       _endlessFocus = endlessLevel;
       _replaying = replay;
+      _showLessonGuide =
+          endlessLevel == null && !previous.opened.contains(lesson.id);
       _board = replay ? GameSave(lesson) : saved ?? GameSave(lesson);
       _lessonSession++;
     });
     if (!identical(progress, previous)) unawaited(_write(progress));
   }
+
+  void _startLesson() => setState(() => _showLessonGuide = false);
 
   void _openEndlessGroup(EndlessGroup group) => setState(() {
     _endlessGroup = group;
@@ -293,6 +298,7 @@ class _GameShellState extends State<GameShell> {
       backLabel: _endless ? 'Back to puzzles' : 'Back to tutorial',
       onBack: _showPicker,
       backIcon: _endless ? Icons.account_tree_outlined : Icons.arrow_back,
+      onStartLesson: _showLessonGuide ? _startLesson : null,
       advance: progressing
           ? (
               label: next == null ? 'Finish tutorial' : 'Next lesson',
@@ -367,7 +373,11 @@ class _GameShellState extends State<GameShell> {
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && !_title && !_restarting) {
           if (board != null) {
-            _showPicker();
+            if (_showLessonGuide) {
+              _startLesson();
+            } else {
+              _showPicker();
+            }
           } else if (group != null) {
             _showEndlessGroups();
           } else {

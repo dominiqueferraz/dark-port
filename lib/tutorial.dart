@@ -17,11 +17,10 @@ sealed class TutorialLesson {
   /// The short aim shown on the lesson screen.
   final String objective;
 
-  /// The full requirements, shown at the top of the hint.
+  /// The full requirements, shown in the first-visit guide and the hint.
   final String goal;
 
-  /// What the lesson teaches: controls and rules it relies on, shown in the
-  /// hint below the goal. Notes explain how things work, never the solution.
+  /// The controls and mechanics explained below the goal.
   final List<String> notes;
 }
 
@@ -56,9 +55,9 @@ final firstReflection = OpticalLesson(
   objective: 'Light the latch.',
   goal: 'Get the laser beam into the latch.',
   notes: [
-    'Drag a loose part to move it. It snaps to the grid.',
-    'Tap a loose part to turn it a quarter turn.',
-    'A mirror turns the beam 90°. Bolted parts stay where they are.',
+    'A mirror turns the beam 90°.',
+    'Drag the loose mirror to move it. Tap it to turn it a quarter turn.',
+    'Bolted parts stay in place. The beam updates after each move.',
   ],
 );
 final dividedBeam = OpticalLesson(
@@ -67,8 +66,8 @@ final dividedBeam = OpticalLesson(
   objective: 'Light both latches.',
   goal: 'Light Latch I and Latch II at the same time.',
   notes: [
-    'A splitter lets half the beam pass straight through and turns the other half like a mirror.',
-    'Each branch carries half the power of the beam that entered.',
+    'Half the beam goes straight through a splitter. The other half turns 90°.',
+    'Tap the loose splitter to change which way the reflected beam turns.',
   ],
 );
 final opticalInterlock = OpticalLesson(
@@ -90,8 +89,7 @@ final patchLead = WiredLesson(
   goal: 'Power Lamp II with 90–110 u.',
   notes: [
     'Tap an output, then an input, to attach a cable.',
-    'Every part has a cable reach. A dashed cable is out of reach and carries nothing.',
-    'Drag a loose part to move it.',
+    'A dashed cable is out of reach and carries no signal. Drag loose parts closer to bring a cable within reach.',
     'Tap a part and use the broken-link icon to remove one of its cables.',
   ],
 );
@@ -102,7 +100,7 @@ final splitRatings = WiredLesson(
   objective: 'Power Load A and Load B.',
   goal: 'Power Load A with 90–110 u and Load B with 45–60 u.',
   notes: [
-    'A splitter shares its input evenly between its outputs: a 2-way splitter gives each output half, a 3-way a third.',
+    'A 2-way splitter sends half the input to each output. A 3-way splitter sends a third to each.',
     'A share can be split again.',
     'Each reading shows a load’s current strength and the band it needs.',
   ],
@@ -123,7 +121,7 @@ final keepalive = WiredLesson(
   keepaliveBoard,
   title: 'Keepalive',
   objective: 'Power Service. Keep the alarm blocker powered.',
-  goal: 'Deliver exactly 30 u to Service while the alarm blocker stays between 25 and 35 u.',
+  goal: 'Deliver 30 u from Pilot to Service. Keep the alarm blocker between 25 and 35 u.',
   notes: [
     'The alarm blocker must stay within its band at every step. If it drops out, the attempt fails. Undo or reset to recover.',
     'The alarm blocker has two inputs. Signals on both add together.',
@@ -135,10 +133,10 @@ final testLine = WiredLesson(
   testLineBoard,
   title: 'Test Line',
   objective: 'Power all three loads. Keep the alarm blocker powered.',
-  goal: 'Power the Terminal with 45–60 u, the Recorder with 90–110 u and Service with exactly 30 u, while the alarm blocker stays between 25 and 35 u.',
+  goal: 'Deliver 45–60 u to Terminal, 90–110 u to Recorder and 30 u from Pilot to Service. Keep the alarm blocker between 25 and 35 u.',
   notes: [
-    'This sheet uses everything from the wired lessons: cable reach, splitter shares, attenuators and the alarm blocker.',
-    'The alarm blocker must stay within its band at every step.',
+    'Use splitter shares and attenuation to match the loads’ readings. Check cable reach when you move a part.',
+    'The alarm blocker must stay within range after every edit, including while you change its feed.',
   ],
 );
 final fanOut = WiredLesson(

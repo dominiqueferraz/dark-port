@@ -4,6 +4,8 @@ An offline, landscape puzzle game for iOS and Android. **New game** opens the tu
 
 The required path starts with **First reflection**, **A divided beam** and **The interlock**. **Patch Lead**, **Split Ratings**, **Bench Pad** and **Keepalive** teach the wired mechanics used together in the **Test Line** capstone. After Split Ratings, take the **Four-way fan-out** practice branch or continue to Bench Pad. The practice board has its own completion mark.
 
+The first time you open a tutorial lesson, a bubble explains its goal and controls. Tap **Start lesson** to play. The game remembers which lessons you’ve opened, and **Hint** shows the guidance whenever you need it.
+
 **Endless** opens the group path. Select group **1**, **Signal Routing**, to open its puzzle path from **1.1** to **1.20**. Levels **1.1–1.10** are playable and save their progress separately from the tutorial. **Edge of Coverage** branches below **Antenna Test**. Each distinct winning route earns a Solution Star, and **Night Lights** also tracks a four-cable record. See the [Endless level register](endless-level-register.md) for the fixtures and solution checks.
 
 **Achievements** on the title screen lists earned and unearned awards with their conditions. Tap the trophy beside the Night Lights stars to inspect its four-cable achievement.

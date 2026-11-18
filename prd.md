@@ -780,7 +780,7 @@ The final cycle is the one where the player brings 100 u to deck 6 before the fr
 Teaching is a guarantee and a place.
 
 - **The guarantee.** No board and no plan ever needs a rule the player has not been taught. The generation rules enforce it, and a campaign check proves it for every reachable mastery state.
-- **The opening.** Sealed Bay and Test Line play in a fixed order on the Tutorial screen. The planned cycle zero introduces the fixed, prewired Station Map so the player can see how rooms wake in sequence.
+- **The opening.** Sealed Bay and Test Line play in a fixed order on the Tutorial screen. Each lesson, including optional practice, opens with a guide bubble on the first visit. It explains the goal and relevant mechanics. Hint makes the same guidance available on later visits. The planned cycle zero introduces the fixed, prewired Station Map so the player can see how rooms wake in sequence.
 - **The first three plans** teach the station layer one rule at a time, each reusing a Test Line lesson. Plan one needs only doors cabled within reach. Plan two has a room that reads strong until it is fed from a restored two-door room. Plan three needs the pad.
 - **Benches.** After that, a new pack arrives as a Bench. It is self-powered, anchors everything except the new behavior and does not move the front.
 - **Practice.** Use the published Tutorial and Endless slots for stand-alone play. The campaign can use an equivalent verified lesson solve as evidence for mastery 1 and credit story discoveries when their rooms are restored.

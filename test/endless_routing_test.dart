@@ -406,6 +406,7 @@ void main() {
       addTearDown(tester.view.resetDevicePixelRatio);
       addTearDown(tester.view.resetPhysicalSize);
       final store = MemoryStore();
+      final lessonGuide = find.byKey(const ValueKey('lesson-guide'));
 
       Future<void> tap(Finder finder) async {
         await tester.ensureVisible(finder);
@@ -417,6 +418,7 @@ void main() {
         await tap(find.text('Endless'));
         await tap(find.byKey(const ValueKey('endless-group-1')));
         await tap(find.byKey(ValueKey('endless-1.$number')));
+        expect(lessonGuide, findsNothing);
         await tap(find.byTooltip('Parts guide'));
       }
 
@@ -460,6 +462,8 @@ void main() {
       await tap(find.byTooltip('Return to title'));
       await tap(find.text('New game'));
       await tap(find.byKey(ValueKey('lesson-${firstReflection.id}')));
+      expect(lessonGuide, findsOneWidget);
+      await tap(find.text('Start lesson'));
       await tap(find.byTooltip('Parts guide'));
       expect(find.text('Mirror'), findsOneWidget);
       expect(find.text('Relay'), findsNothing);
