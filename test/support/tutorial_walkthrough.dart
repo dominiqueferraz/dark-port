@@ -11,11 +11,14 @@ import 'package:dark_port/optical_deck.dart';
 import 'package:dark_port/puzzle_console.dart';
 import 'package:dark_port/signal_board.dart';
 import 'package:dark_port/signal_wiring.dart';
+import 'package:dark_port/sheet_style.dart';
 import 'package:dark_port/tutorial.dart';
 import 'package:dark_port/tutorial_progress.dart';
 import 'package:dark_port/wired_boards.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+
+import 'puzzle_announcement.dart';
 
 Future<void> playTutorial(
   WidgetTester tester, {
@@ -214,11 +217,13 @@ Future<void> playTutorial(
 
   await move('M1', const FloorPoint(1.05, -.27));
   await rotate('M1');
+  expect(puzzleAnnouncement, findsNothing);
   await capture('qa-reflection-solved');
   await tap(advance);
   await capturePhase(dividedBeam);
 
   await move('S1', const FloorPoint(-3.15, -.27));
+  expect(puzzleAnnouncement, findsNothing);
   await tap(advance);
   await capturePhase(opticalInterlock);
   expect(board().trace.lit, {0});
@@ -245,6 +250,7 @@ Future<void> playTutorial(
   await rotate('M2');
   expect(board().trace.lit, {0, 1, 2});
   expect(board().opened, isTrue);
+  expect(puzzleAnnouncement, findsNothing);
   expectAdvanceVisible('Next lesson');
   await capture('qa-interlock-solved');
   await tap(advance);
@@ -368,6 +374,7 @@ Future<void> playTutorial(
   await pressIcon('Disconnect Feed → Lamp I');
   await wire('feed', 'lampTwo');
   expect((await currentSave()).solved, isTrue);
+  expect(puzzleAnnouncement, findsNothing);
   await capture('qa-patch-lead');
   await tap(advance);
   active = splitRatings;
@@ -380,6 +387,7 @@ Future<void> playTutorial(
   await wire('twoWay', 'loadB');
   expectGoal('loadB', '50/45–60', 'Online');
   expect((await currentSave()).solved, isTrue);
+  expect(puzzleAnnouncement, findsNothing);
   await back();
   await capture('qa-tutorial-branch');
   expect(row(splitRatings).hitTestable(), findsOneWidget);
@@ -410,6 +418,7 @@ Future<void> playTutorial(
   await wire('fourWay', 'west', port: 3);
   expect((await currentSave()).solved, isTrue);
   expectGoal('east', '75/75', 'Online');
+  expect(puzzleAnnouncement, findsNothing);
   await back();
 
   await open(benchPad);
@@ -429,6 +438,7 @@ Future<void> playTutorial(
   await pressIcon('10 u loss');
   expectGoal('meter', '30/30', 'Online');
   expect((await currentSave()).solved, isTrue);
+  expect(puzzleAnnouncement, findsNothing);
   await tap(advance);
   active = keepalive;
   await capturePhase(keepalive);
@@ -448,6 +458,7 @@ Future<void> playTutorial(
   await tapPart('pilot');
   await pressIcon('0 u loss');
   expect((await currentSave()).solved, isTrue);
+  expect(puzzleAnnouncement, findsNothing);
   await capture('qa-keepalive');
   await tap(advance);
   active = testLine;
@@ -493,13 +504,33 @@ Future<void> playTutorial(
   await tester.pumpAndSettle();
 
   await dragPart('alarmBlocker', 5.5, 6.5);
-  expect(find.text('Alarm tripped. Undo or reset the room.'), findsOneWidget);
+  final failureNotice = find.byKey(const ValueKey('puzzle-failure-notice'));
+  expect(
+    find.descendant(
+      of: failureNotice,
+      matching: find
+          .text('Alarm tripped. Undo or reset the room.')
+          .hitTestable(),
+    ),
+    findsOneWidget,
+  );
+  expect(puzzleAnnouncement, findsNothing);
+  final failure = find.descendant(
+    of: find.byType(DraftingTitleBlock),
+    matching: find.text('FAILED'),
+  );
+  expect(failure, findsOneWidget);
+  expect(tester.widget<Text>(failure).style!.color, SheetStyle.fallback.stamp);
+  final failedOffset =
+      tester.getCenter(failure).dx -
+      tester.getTopLeft(find.byType(DraftingTitleBlock)).dx;
   expect((await currentSave()).alarmFailed, isTrue);
   await dragPart('alarmBlocker', 2.5, 5.5);
   expect((await currentSave()).alarmFailed, isTrue);
   await pressHistory('Undo');
   expectGoal('alarmBlocker', '30/25–35', 'Holding on Pilot');
   expect((await currentSave()).alarmFailed, isFalse);
+  expect(failureNotice, findsNothing);
 
   await pressHistory('Redo');
   expect((await currentSave()).alarmFailed, isTrue);
@@ -632,6 +663,21 @@ Future<void> playTutorial(
   expectGoal('service', '30/30', 'Online');
   expect(complete, findsOneWidget);
   expect(find.byTooltip('0 u loss'), findsNothing);
+  final approval = find.descendant(
+    of: find.byType(DraftingTitleBlock),
+    matching: find.text('APPROVED'),
+  );
+  expect(approval, findsOneWidget);
+  expect(
+    tester.widget<Text>(approval).style!.color,
+    SheetStyle.fallback.approval,
+  );
+  expect(
+    tester.getCenter(approval).dx -
+        tester.getTopLeft(find.byType(DraftingTitleBlock)).dx,
+    closeTo(failedOffset, .1),
+  );
+  expect(puzzleAnnouncement, findsNothing);
   expectAdvanceVisible('Finish tutorial');
   await pressIcon('Parts guide');
   expect(find.text('4-way splitter'), findsOneWidget);
@@ -695,6 +741,7 @@ Future<void> playTutorial(
   await pressHistory('Undo');
   expectGoal('recorder', '100/90–110', 'Online');
   expect((await currentSave()).positions, solved.positions);
+  expect(puzzleAnnouncement, findsNothing);
   await tap(advance);
   expect(find.text('ALL SHEETS APPROVED'), findsOneWidget);
   await capture('qa-tutorial-complete');
@@ -704,6 +751,7 @@ Future<void> playTutorial(
   await open(testLine);
   expectGoal('recorder', '0/90–110', 'No signal');
   expect((await currentSave()).solved, isTrue);
+  expect(puzzleAnnouncement, findsNothing);
   await dragPart('beacon', 1, 1);
   expect((await currentSave()).positions, solved.positions);
 }

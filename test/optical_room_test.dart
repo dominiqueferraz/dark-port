@@ -6,6 +6,7 @@ import 'package:dark_port/tutorial.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/puzzle_announcement.dart';
 import 'support/memory_store.dart';
 
 void main() {
@@ -111,6 +112,7 @@ void main() {
       expect(optic('M1').turned, isFalse);
       expect(board().opened, isTrue);
       expect(find.byKey(const ValueKey('lesson-complete')), findsOneWidget);
+      expect(puzzleAnnouncement, findsNothing);
       await tester.tap(find.byTooltip('Undo'));
       await tester.pump();
       expect(board().opened, isFalse);
@@ -118,6 +120,7 @@ void main() {
       await tester.tap(find.byTooltip('Redo'));
       await tester.pump();
       expect(board().opened, isTrue);
+      expect(puzzleAnnouncement, findsNothing);
 
       await tester.tap(find.byTooltip('Back to tutorial'));
       await tester.pumpAndSettle();
@@ -164,6 +167,7 @@ void main() {
       await move('S1', const FloorPoint(-3.15, -.27));
       expect(board().trace.solves(splittingLesson), isTrue);
       expect(find.byKey(const ValueKey('lesson-complete')), findsOneWidget);
+      expect(puzzleAnnouncement, findsNothing);
       await tester.ensureVisible(find.text('Next lesson'));
       await tester.tap(find.text('Next lesson'));
       await tester.pumpAndSettle();
@@ -191,6 +195,8 @@ void main() {
 
       await move('M2', alarmLine);
       expect(board().trace.lit, isEmpty);
+      expect(find.text('FAILED'), findsOneWidget);
+      expect(puzzleAnnouncement, findsNothing);
       expect(find.textContaining('Alarm line interrupted.'), findsOneWidget);
       expect(find.text('Next lesson'), findsNothing);
       await rotate('M2');
@@ -198,6 +204,7 @@ void main() {
       await tester.tap(find.byTooltip('Undo'));
       await tester.pump();
       expect(board().trace.lit, {0});
+      expect(find.text('FAILED'), findsNothing);
 
       await move('S2', alarmLine);
       await rotate('S2');
@@ -207,6 +214,7 @@ void main() {
       expect(board().trace.lit, {0, 1, 2});
       expect(board().opened, isTrue);
       expect(find.byKey(const ValueKey('lesson-complete')), findsOneWidget);
+      expect(puzzleAnnouncement, findsNothing);
       await tester.ensureVisible(find.text('Next lesson'));
       await tester.tap(find.text('Next lesson'));
       await tester.pumpAndSettle();

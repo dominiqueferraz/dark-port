@@ -15,6 +15,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/memory_store.dart';
+import 'support/puzzle_announcement.dart';
 
 SignalLink _link(String from, String to, [int output = 0]) =>
     (from: from, to: to, output: output, input: 0);
@@ -573,6 +574,7 @@ Future<void> playRoutingBoards(WidgetTester tester, GameStore store) async {
       expect(row.top, greaterThanOrEqualTo(readings.top), reason: goal);
       expect(row.bottom, lessThanOrEqualTo(readings.bottom), reason: goal);
     }
+    await dismissPuzzleAnnouncement(tester);
     await tap(back);
   }
 

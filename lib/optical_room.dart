@@ -210,6 +210,11 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
         revealedParts: widget.revealedParts,
       ),
       solved: _opened,
+      failureMessage: !_alarmFailed
+          ? null
+          : _history.canUndo
+          ? 'Alarm line interrupted. Undo or reset to try again.'
+          : 'Alarm line interrupted. Reset the room to try again.',
       feedback: [?_status()],
     );
   }
@@ -336,10 +341,9 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
   }
 
   Widget? _status() {
-    if (_opened) return null;
+    if (_opened || _alarmFailed) return null;
     final sheet = context.sheet;
     final held = _held != null;
-    final alarmFailed = _alarmFailed;
     final alarmAtRisk = held && _validDrop && _trace.interruptsAlarm(_level);
     final status =
         _message ??
@@ -349,10 +353,6 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
                   : _validDrop
                   ? 'Release to place.'
                   : 'Choose a clear placement dot.')
-            : alarmFailed
-            ? (!_history.canUndo
-                  ? 'Alarm line interrupted. Reset the room to try again.'
-                  : 'Alarm line interrupted. Undo or reset to try again.')
             : null);
     if (status == null) return null;
     return Semantics(
@@ -362,7 +362,7 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
         style: draftingLettering(
           11,
           spacing: .3,
-          color: alarmFailed || alarmAtRisk ? sheet.stamp : sheet.faint,
+          color: alarmAtRisk ? sheet.stamp : sheet.faint,
         ),
       ),
     );

@@ -292,11 +292,11 @@ class _MiniStamp extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 3, vertical: 1),
         decoration: BoxDecoration(
-          border: Border.all(color: sheet.stamp, width: 1.1),
+          border: Border.all(color: sheet.approval, width: 1.1),
         ),
         child: Text(
           'APPROVED',
-          style: draftingLettering(7, color: sheet.stamp, spacing: 1.2),
+          style: draftingLettering(7, color: sheet.approval, spacing: 1.2),
         ),
       ),
     );

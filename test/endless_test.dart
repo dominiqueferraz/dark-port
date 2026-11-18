@@ -12,6 +12,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/puzzle_announcement.dart';
 import 'support/memory_store.dart';
 
 const _patch = (from: 'feed', to: 'broadcaster', input: 0, output: 0);
@@ -399,6 +400,11 @@ void main() {
       (await store.load())!.endlessBoards[antennaTestLesson.id]!.solved,
       isTrue,
     );
+    expect(find.text('Awards earned'), findsOneWidget);
+    expect(find.text('Scenario approved'), findsNothing);
+    expect(find.text('Solution Star earned'), findsOneWidget);
+    expect(find.text('Achievement earned · First Signal'), findsOneWidget);
+    await dismissPuzzleAnnouncement(tester);
     await tap(find.byTooltip('Back to puzzles'));
     expect(find.byTooltip('Antenna Test · Replay'), findsOneWidget);
     // Saves written before Solution Stars still contain the completed fixture.
@@ -415,7 +421,15 @@ void main() {
       'coverage-boundary',
     });
     await tap(numbered(1));
+    expect(puzzleAnnouncement, findsNothing);
     expect(find.text('40 / ≥30 u'), findsNothing);
+    await tap(feed);
+    await tap(broadcaster);
+    final replayFrom = tester.getCenter(broadcaster);
+    await tester.dragFrom(replayFrom, target - replayFrom);
+    await tester.pumpAndSettle();
+    expect(find.text('APPROVED'), findsOneWidget);
+    expect(puzzleAnnouncement, findsNothing);
     expect(
       (await store.load())!.endlessBoards[antennaTestLesson.id]!.solved,
       isTrue,
@@ -622,6 +636,7 @@ Future<void> playNewEndlessBoards(WidgetTester tester, GameStore store) async {
       level.solutionIds.toSet(),
     );
     expectStars(puzzleStars, [Icons.star]);
+    await dismissPuzzleAnnouncement(tester);
     await tap(back);
   }
 
@@ -682,6 +697,9 @@ Future<void> playNewEndlessBoards(WidgetTester tester, GameStore store) async {
   expect((await store.load())!.resultFor(night)!.stars, {'cascade'});
   expectStars(puzzleStars, cascadeEarned);
   expectTrophy(Icons.emoji_events_outlined);
+  expect(find.text('Solution Star earned'), findsOneWidget);
+  expect(find.text('Achievement earned · First Signal'), findsNothing);
+  await dismissPuzzleAnnouncement(tester);
   await checkNightLightsHint(puzzleStars, cascadeEarned);
   await tap(back);
   expectStars(entry(night.number), cascadeEarned);
@@ -694,6 +712,10 @@ Future<void> playNewEndlessBoards(WidgetTester tester, GameStore store) async {
   expectLeads(0, 5);
   expectStars(puzzleStars, bothEarned);
   expectTrophy(Icons.emoji_events_outlined);
+  expect(find.text('Solution Star earned'), findsOneWidget);
+  expect(find.text('Achievement earned · Both Routes'), findsOneWidget);
+  expect(find.text('Achievement earned · Four-Cable Record'), findsNothing);
+  await dismissPuzzleAnnouncement(tester);
   await tap(part('twoWayB'));
   await tap(find.byTooltip('Disconnect Two-way A → Two-way B'));
   expectLeads(1, 5);
@@ -704,6 +726,10 @@ Future<void> playNewEndlessBoards(WidgetTester tester, GameStore store) async {
   expect(result.stars, {'balanced', 'cascade'});
   expect(result.fourCableRecord, isTrue);
   expectStars(puzzleStars, bothEarned);
+  expect(find.text('Achievement earned · Four-Cable Record'), findsOneWidget);
+  expect(find.text('Scenario approved'), findsNothing);
+  expect(find.text('Solution Star earned'), findsNothing);
+  await dismissPuzzleAnnouncement(tester);
   await tap(back);
   expectStars(entry(night.number), bothEarned);
   await openAchievementsFromPuzzles();

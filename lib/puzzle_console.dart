@@ -63,6 +63,7 @@ class PuzzleConsole extends StatelessWidget {
     required this.playfield,
     required this.readings,
     required this.solved,
+    this.failureMessage,
     this.inventory,
     this.canLeave = true,
     this.onHelp,
@@ -76,6 +77,7 @@ class PuzzleConsole extends StatelessWidget {
   final Widget readings;
   final Widget? inventory;
   final bool solved;
+  final String? failureMessage;
   final bool canLeave;
   final VoidCallback? onHelp;
   final List<Widget> feedback;
@@ -130,6 +132,10 @@ class PuzzleConsole extends StatelessWidget {
                 padding: const EdgeInsets.only(top: 8),
                 child: _titleBlock(),
               ),
+            if (failureMessage case final message?) ...[
+              const SizedBox(height: 6),
+              _FailureNotice(message),
+            ],
             if (solved && navigation.advance != null) _advanceButton(context),
           ],
         ),
@@ -174,6 +180,10 @@ class PuzzleConsole extends StatelessWidget {
         ?inventory,
         const SizedBox(height: 6),
         if (brief.sheet != null) ...[_titleBlock(), const SizedBox(height: 6)],
+        if (failureMessage case final message?) ...[
+          _FailureNotice(message),
+          const SizedBox(height: 6),
+        ],
         if (_objective() case final objective?)
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 72),
@@ -212,7 +222,11 @@ class PuzzleConsole extends StatelessWidget {
     child: DraftingTitleBlock(
       title: brief.title,
       sheet: brief.sheet!,
-      approved: solved,
+      status: switch ((solved, failureMessage != null)) {
+        (_, true) => DraftingStatus.failed,
+        (true, false) => DraftingStatus.approved,
+        _ => DraftingStatus.inProgress,
+      },
     ),
   );
 
@@ -470,6 +484,42 @@ class PuzzleConsole extends StatelessWidget {
             icon: const Icon(Icons.close),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _FailureNotice extends StatelessWidget {
+  const _FailureNotice(this.message);
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final red = context.sheet.stamp;
+    return Semantics(
+      key: const ValueKey('puzzle-failure-notice'),
+      liveRegion: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          border: Border.all(color: red),
+          color: red.withValues(alpha: .07),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+          child: Row(
+            spacing: 7,
+            children: [
+              Icon(Icons.warning_amber_rounded, size: 16, color: red),
+              Expanded(
+                child: Text(
+                  message,
+                  style: draftingLettering(12, color: red, spacing: .2),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

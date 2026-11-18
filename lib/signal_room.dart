@@ -579,8 +579,6 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     final alarmAtRisk = validDrop && _board.interruptsAlarm(deliveries);
     final alarmWarning = alarmAtRisk
         ? 'This placement would interrupt the alarm blocker.'
-        : _state.alarmFailed
-        ? 'Alarm tripped. Undo or reset the room.'
         : null;
     final inspector = _inspected == null
         ? null
@@ -635,8 +633,11 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
         revealedParts: widget.revealedParts,
       ),
       solved: drag == null && _state.solved,
+      failureMessage: _state.alarmFailed
+          ? 'Alarm tripped. Undo or reset the room.'
+          : null,
       feedback: [
-        if (pathWarning != null)
+        if (!_state.alarmFailed && pathWarning != null)
           Padding(
             padding: const EdgeInsets.only(top: 8),
             child: Semantics(

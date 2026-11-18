@@ -147,18 +147,28 @@ TextPainter layoutDraftingLettering(
   textDirection: TextDirection.ltr,
 )..layout();
 
-/// The lesson's title block, stamped once the drawing is approved.
+enum DraftingStatus {
+  inProgress('IN PROGRESS'),
+  approved('APPROVED'),
+  failed('FAILED');
+
+  const DraftingStatus(this.label);
+
+  final String label;
+}
+
+/// The lesson's title block, stamped when the drawing is approved or fails.
 class DraftingTitleBlock extends StatelessWidget {
   const DraftingTitleBlock({
     super.key,
     required this.title,
     required this.sheet,
-    required this.approved,
+    required this.status,
   });
 
   final String title;
   final String sheet;
-  final bool approved;
+  final DraftingStatus status;
 
   Widget _cell(
     BuildContext context,
@@ -198,9 +208,11 @@ class DraftingTitleBlock extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final ink = context.sheet.ink;
+    final approved = status == DraftingStatus.approved;
     return Semantics(
       container: true,
-      label: 'Sheet $sheet${approved ? ', approved' : ''}',
+      liveRegion: status == DraftingStatus.failed,
+      label: 'Sheet $sheet, ${status.label.toLowerCase()}',
       excludeSemantics: true,
       child: DecoratedBox(
         decoration: BoxDecoration(border: Border.all(color: ink, width: 1.6)),
@@ -234,15 +246,23 @@ class DraftingTitleBlock extends StatelessWidget {
                     const DraftingCellDivider(width: .7),
                     Expanded(
                       flex: 5,
-                      child: approved
-                          ? const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 4),
+                      child: status == DraftingStatus.inProgress
+                          ? _cell(context, null, status.label)
+                          : Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 4,
+                              ),
                               child: FittedBox(
                                 fit: BoxFit.scaleDown,
-                                child: _ApprovedStamp(),
+                                child: _StatusStamp(
+                                  key: ValueKey(status),
+                                  label: status.label,
+                                  color: approved
+                                      ? context.sheet.approval
+                                      : context.sheet.stamp,
+                                ),
                               ),
-                            )
-                          : _cell(context, null, 'IN PROGRESS'),
+                            ),
                     ),
                   ],
                 ),
@@ -255,12 +275,14 @@ class DraftingTitleBlock extends StatelessWidget {
   }
 }
 
-class _ApprovedStamp extends StatelessWidget {
-  const _ApprovedStamp();
+class _StatusStamp extends StatelessWidget {
+  const _StatusStamp({super.key, required this.label, required this.color});
+
+  final String label;
+  final Color color;
 
   @override
   Widget build(BuildContext context) {
-    final stamp = context.sheet.stamp;
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: .65, end: 1),
       duration: const Duration(milliseconds: 260),
@@ -276,10 +298,10 @@ class _ApprovedStamp extends StatelessWidget {
           angle: -4 * math.pi / 180,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-            decoration: BoxDecoration(border: Border.all(color: stamp)),
+            decoration: BoxDecoration(border: Border.all(color: color)),
             child: Text(
-              'APPROVED',
-              style: draftingLettering(9.5, color: stamp, spacing: .8),
+              label,
+              style: draftingLettering(9.5, color: color, spacing: .8),
             ),
           ),
         ),

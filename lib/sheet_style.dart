@@ -21,6 +21,7 @@ class SheetStyle {
     required this.beam,
     required this.alarmBeam,
     required this.stamp,
+    required this.approval,
     required this.brightness,
     required this.fineRule,
     this.surfaceAsset,
@@ -39,6 +40,7 @@ class SheetStyle {
   final Color beam;
   final Color alarmBeam;
   final Color stamp;
+  final Color approval;
   final Brightness brightness;
   final Color fineRule;
   final String? surfaceAsset;
@@ -55,6 +57,7 @@ class SheetStyle {
     beam: Color(0xffae3823),
     alarmBeam: Color(0xff895811),
     stamp: Color(0xffb32e28),
+    approval: Color(0xff276339),
     brightness: Brightness.light,
     fineRule: Color(0xff23303f),
   );
@@ -69,6 +72,7 @@ class SheetStyle {
     beam: Color(0xffffc857),
     alarmBeam: Color(0xff8be0c0),
     stamp: Color(0xffffac98),
+    approval: Color(0xffa8f0b1),
     brightness: Brightness.dark,
     fineRule: Color(0xff899cc0),
     surfaceAsset: 'assets/drafting/surfaces/blueprint.png',
@@ -86,6 +90,7 @@ class SheetStyle {
     beam: Color(0xffb54c34),
     alarmBeam: Color(0xff895811),
     stamp: Color(0xffb32e28),
+    approval: Color(0xff276339),
     brightness: Brightness.light,
     fineRule: Color(0xff89847b),
     surfaceAsset: 'assets/drafting/surfaces/paper.png',
@@ -101,6 +106,7 @@ class SheetStyle {
     beam: Color(0xffb64f39),
     alarmBeam: Color(0xff78521a),
     stamp: Color(0xff792019),
+    approval: Color(0xff25542e),
     brightness: Brightness.light,
     fineRule: Color(0xff938f85),
     surfaceAsset: 'assets/drafting/surfaces/aged.png',

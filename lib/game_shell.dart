@@ -13,6 +13,7 @@ import 'optical_bay.dart';
 import 'optical_deck.dart';
 import 'optical_room.dart';
 import 'part_guide.dart';
+import 'puzzle_announcements.dart';
 import 'puzzle_console.dart';
 import 'settings_screen.dart';
 import 'sheet_style.dart';
@@ -101,7 +102,34 @@ class _GameShellState extends State<GameShell> {
             : progress.record(board);
       }
     });
-    if (!identical(previous, _progress)) unawaited(_write(_progress!));
+    final progress = _progress;
+    if (progress == null || identical(previous, progress)) return;
+    unawaited(_write(progress));
+    if (!_endless || !board.solved) return;
+
+    final level = endlessLevelsByLessonId[board.lesson.id]!;
+    final before = previous?.resultFor(level)?.stars ?? const <String>{};
+    final after = progress.resultFor(level)?.stars ?? const <String>{};
+    final starConditions = [
+      for (final entry in level.solutionConditions.entries)
+        if (after.contains(entry.key) && !before.contains(entry.key))
+          entry.value,
+    ];
+    final achievements = [
+      for (final achievement in Achievement.values)
+        if (achievement.isEarned(progress) && !achievement.isEarned(previous))
+          achievement,
+    ];
+    if (starConditions.isNotEmpty || achievements.isNotEmpty) {
+      unawaited(
+        showPuzzleAwards(
+          context,
+          scenario: board.lesson.title,
+          starConditions: starConditions,
+          achievements: achievements,
+        ),
+      );
+    }
   }
 
   Future<void> _restart() async {
