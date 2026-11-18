@@ -195,11 +195,11 @@ Devices resolve their same-send inputs together and then deliver downstream. Ord
 
 ### Light
 
-- A laser sends a 100 u ray in its authored direction. A ray travels straight until it meets a part, a baffle or the board edge.
+- A laser sends a 100 u ray in its authored direction. Each leg needs a clear, straight sightline from the laser or previous optic. The ray stops at the first object or the board edge.
 - A **mirror** turns a ray 90° according to its diagonal and the incoming direction. Tap to change the diagonal.
 - An **optical splitter** sends half the incident light straight and half along the turned direction.
 - A **baffle** blocks any ray that strikes it and occupies space.
-- A **light receiver** measures incident light from its authored approach only. Sealed Bay latches and the Alarm accept any reading above zero. Later sensors use a threshold or a dark condition.
+- A **light receiver** or **optical-to-radio converter** accepts a direct hit on its input aperture from the marked direction. A hit on the housing stops the ray. A laser casing, an antenna and the housing outside a mirror or splitter aperture also block light. Sealed Bay latches and the Alarm accept any reading above zero. Later sensors use a threshold or a dark condition.
 - Independent rays cross without interacting. Draw a gap at the crossing.
 
 **Coherent benches** (group 4) add phase, shown as a clock hand.

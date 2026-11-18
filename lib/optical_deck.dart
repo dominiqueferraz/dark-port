@@ -453,7 +453,10 @@ class _OpticalDrawing extends CustomPainter {
           ? geometry.source(sources[beam.source])
           : geometry.project(beam.from);
       final to = switch (beam.receiver) {
-        final receiver? => geometry.receiver(receiver),
+        final receiver? =>
+          geometry.project(beam.to) +
+              (geometry.receiver(receiver) -
+                  geometry.project(level.receivers[receiver].position)),
         null => _beamEnd(beam),
       };
       final path = Path()
@@ -522,11 +525,10 @@ class _OpticalDrawing extends CustomPainter {
     }
   }
 
-  bool _stopsAtWall(BeamSegment beam) =>
-      beam.receiver == null && beam.toOptic == null;
-
   bool _exitsBay(BeamSegment beam) {
-    if (!_stopsAtWall(beam)) return false;
+    if (beam.blocked || beam.receiver != null || beam.toOptic != null) {
+      return false;
+    }
     final end = beam.to;
     final floor = level.floor;
     return (end.x - floor.left).abs() < 1e-6 ||
@@ -540,7 +542,7 @@ class _OpticalDrawing extends CustomPainter {
 
   Offset _beamEnd(BeamSegment beam) {
     final to = geometry.project(beam.to);
-    if (!_stopsAtWall(beam)) return to;
+    if (!_exitsBay(beam)) return to;
     final from = geometry.project(beam.from);
     final length = (to - from).distance;
     if (length <= OpticalDeckGeometry._wallGap * 2) return to;

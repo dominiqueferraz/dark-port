@@ -15,6 +15,9 @@ enum BeamDirection {
   final double x;
   final double y;
 
+  BeamDirection get opposite =>
+      values[(index + values.length ~/ 2) % values.length];
+
   BeamDirection reflected(bool turned) => switch (this) {
     north => turned ? west : east,
     east => turned ? south : north,
@@ -301,6 +304,7 @@ typedef BeamSegment = ({
   int? receiver,
   String? fromOptic,
   String? toOptic,
+  bool blocked,
   int source,
 });
 
@@ -460,8 +464,57 @@ const _epsilon = .0001;
 const _halfOptic = .28;
 const _receiverHalfWidth = .34;
 
-// Nearest intersection wins. Both branches leave the actual hit point,
-// so a part can catch a beam anywhere along its diagonal aperture.
+const _receiverDepth = .22;
+const _antennaHalfWidth = .24;
+const _laserHalfWidth = .24;
+
+double _dot(FloorPoint a, FloorPoint b) => a.x * b.x + a.y * b.y;
+
+/// Measure the ray's passage through the opaque housing behind an aperture.
+(double, double) _housingBounds(
+  _Ray ray,
+  FloorPoint aperture,
+  BeamDirection incoming, {
+  required double depth,
+  required double halfWidth,
+}) {
+  final axis = FloorPoint(incoming.x, incoming.y);
+  final step = FloorPoint(ray.direction.x, ray.direction.y);
+  final offset = ray.from - aperture;
+  final (front, back) = _raySlab(
+    _dot(offset, axis),
+    _dot(step, axis),
+    0,
+    depth,
+  );
+  final (left, right) = _raySlab(
+    _cross(offset, axis),
+    _cross(step, axis),
+    -halfWidth,
+    halfWidth,
+  );
+  return (math.max(front, left), math.min(back, right));
+}
+
+double? _entry((double, double) bounds) {
+  final (near, far) = bounds;
+  if (near > far || far <= 0) return null;
+  return math.max(0, near);
+}
+
+(double, double) _partBounds(_Ray ray, FloorPoint center, double radius) {
+  final offset = center - ray.from;
+  final heading = FloorPoint(ray.direction.x, ray.direction.y);
+  final along = _dot(offset, heading);
+  final across = _cross(offset, heading);
+  final halfChordSquared = radius * radius - across * across;
+  if (halfChordSquared < 0) return (double.infinity, double.negativeInfinity);
+  final halfChord = math.sqrt(halfChordSquared);
+  return (along - halfChord, along + halfChord);
+}
+
+// Each leg stops at its first contact. Correctly approached apertures accept
+// the ray. The opaque face takes precedence when contacts tie.
 OpticalTrace traceOptics(OpticalLevel level, List<Optic> layout) {
   final sources = level.sources.toList(growable: false);
   final obstacles = level.lightObstacles.toList(growable: false);
@@ -487,27 +540,74 @@ OpticalTrace traceOptics(OpticalLevel level, List<Optic> layout) {
     var (_, distance) = _rayBounds(origin, direction, level.floor);
     Optic? hit;
     int? receiver;
+    var blocked = false;
+    final heading = FloorPoint(direction.x, direction.y);
 
-    for (var i = 0; i < level.receivers.length; i++) {
-      final sensor = level.receivers[i];
-      if (direction != sensor.incoming) continue;
-      final offset = sensor.position - origin;
-      final along = offset.x * direction.x + offset.y * direction.y;
-      final across = offset.x * direction.y - offset.y * direction.x;
-      if (along > _epsilon &&
-          along <= distance + _epsilon &&
-          across.abs() <= _receiverHalfWidth) {
-        distance = along;
-        receiver = i;
+    void contact(double at, {int? sensor, Optic? optic}) {
+      if (at > distance + _epsilon) return;
+      final opaque = sensor == null && optic == null;
+      if (at >= distance - _epsilon &&
+          (blocked || (!opaque && (hit != null || receiver != null)))) {
+        return;
       }
+      distance = math.min(distance, at);
+      blocked = opaque;
+      receiver = sensor;
+      hit = optic;
+    }
+
+    void opaque((double, double) bounds) {
+      if (_entry(bounds) case final entry?) contact(entry);
+    }
+
+    void input(
+      FloorPoint point,
+      BeamDirection incoming, {
+      int? sensor,
+      Optic? optic,
+    }) {
+      final offset = point - origin;
+      final along = _dot(offset, heading);
+      if (direction == incoming &&
+          along > _epsilon &&
+          _cross(offset, heading).abs() <= _receiverHalfWidth) {
+        contact(along, sensor: sensor, optic: optic);
+        return;
+      }
+      opaque(
+        _housingBounds(
+          ray,
+          point,
+          incoming,
+          depth: _receiverDepth,
+          halfWidth: _receiverHalfWidth,
+        ),
+      );
+    }
+
+    for (final (i, sensor) in level.receivers.indexed) {
+      input(sensor.position, sensor.incoming, sensor: i);
     }
 
     for (final block in obstacles) {
-      final (along, exit) = _rayBounds(origin, direction, block);
-      if (along > _epsilon && along <= exit && along <= distance) {
-        distance = along;
-        receiver = null;
-      }
+      opaque(_rayBounds(origin, direction, block));
+    }
+    for (final antenna in level.antennas) {
+      opaque(_partBounds(ray, antenna.position, _antennaHalfWidth));
+    }
+    for (final (i, source) in sources.indexed) {
+      if (i == ray.source && ray.previous == null) continue;
+      final axis = FloorPoint(source.direction.x, source.direction.y);
+      final depth = _dot(source.position - source.foot, axis) + .18;
+      opaque(
+        _housingBounds(
+          ray,
+          source.position,
+          source.direction.opposite,
+          depth: depth,
+          halfWidth: _laserHalfWidth,
+        ),
+      );
     }
 
     for (final optic in layout) {
@@ -515,31 +615,24 @@ OpticalTrace traceOptics(OpticalLevel level, List<Optic> layout) {
       final offset = optic.position - origin;
       if (optic.converter case final converter?) {
         final lane = converter.lanes[optic.position];
-        final along = offset.x * direction.x + offset.y * direction.y;
-        if (lane?.incoming == direction &&
-            along > _epsilon &&
-            along < distance &&
-            _cross(offset, FloorPoint(direction.x, direction.y)).abs() <=
-                _receiverHalfWidth) {
-          distance = along;
-          hit = optic;
-          receiver = null;
+        if (lane != null) {
+          input(optic.position, lane.incoming, optic: optic);
+        } else {
+          opaque(_partBounds(ray, optic.position, OpticalLevel.opticRadius));
         }
         continue;
       }
-      final slope = optic.turned ? -1.0 : 1.0;
-      const faceX = 1.0;
-      final faceY = slope;
-      final determinant = direction.x * faceY - direction.y * faceX;
-      if (determinant.abs() < _epsilon) continue;
-      final along = (offset.x * faceY - offset.y * faceX) / determinant;
-      final across =
-          (offset.x * direction.y - offset.y * direction.x) / determinant;
-      if (along > _epsilon && along < distance && across.abs() <= _halfOptic) {
-        distance = along;
-        hit = optic;
-        receiver = null;
+      final face = FloorPoint(1, optic.turned ? -1 : 1);
+      final determinant = _cross(heading, face);
+      if (determinant.abs() > _epsilon) {
+        final along = _cross(offset, face) / determinant;
+        final across = _cross(offset, heading) / determinant;
+        if (along > _epsilon && across.abs() <= _halfOptic) {
+          contact(along, optic: optic);
+          continue;
+        }
       }
+      opaque(_partBounds(ray, optic.position, OpticalLevel.opticRadius));
     }
 
     if (distance <= _epsilon) continue;
@@ -554,22 +647,24 @@ OpticalTrace traceOptics(OpticalLevel level, List<Optic> layout) {
       receiver: receiver,
       fromOptic: ray.previous,
       toOptic: hit?.id,
+      blocked: blocked,
       source: ray.source,
     ));
-    if (receiver != null) lit.add(receiver);
-    if (hit == null || hit.converter != null) continue;
+    if (receiver case final accepted?) lit.add(accepted);
+    final struck = hit;
+    if (struck == null || struck.converter != null) continue;
     final state = (
       ray.source,
-      hit.id,
+      struck.id,
       direction,
       (end.x * 10000).round(),
       (end.y * 10000).round(),
     );
     if (!visited.add(state)) continue;
 
-    final outputs = switch (hit.kind) {
-      OpticKind.mirror => [direction.reflected(hit.turned)],
-      OpticKind.splitter => [direction.reflected(hit.turned), direction],
+    final outputs = switch (struck.kind) {
+      OpticKind.mirror => [direction.reflected(struck.turned)],
+      OpticKind.splitter => [direction.reflected(struck.turned), direction],
       OpticKind.converter => const <BeamDirection>[],
     };
     for (final output in outputs) {
@@ -577,7 +672,7 @@ OpticalTrace traceOptics(OpticalLevel level, List<Optic> layout) {
         from: end,
         direction: output,
         strength: ray.strength / outputs.length,
-        previous: hit.id,
+        previous: struck.id,
         source: ray.source,
       ));
     }
