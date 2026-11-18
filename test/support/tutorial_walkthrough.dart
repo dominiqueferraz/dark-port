@@ -4,8 +4,8 @@ import 'package:dark_port/drafting_controls.dart';
 import 'package:dark_port/drafting_grid.dart';
 import 'package:dark_port/drafting_parts.dart';
 import 'package:dark_port/drafting_theme.dart';
+import 'package:dark_port/game_audio.dart';
 import 'package:dark_port/game_save.dart';
-import 'package:dark_port/main.dart';
 import 'package:dark_port/optical_bay.dart';
 import 'package:dark_port/optical_deck.dart';
 import 'package:dark_port/puzzle_console.dart';
@@ -18,6 +18,7 @@ import 'package:dark_port/wired_boards.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'pump_silent_game.dart';
 import 'puzzle_announcement.dart';
 
 Future<void> playTutorial(
@@ -52,7 +53,7 @@ Future<void> playTutorial(
   Future<void> relaunch() async {
     await tester.pumpWidget(const SizedBox.shrink());
     store = makeStore();
-    await tester.pumpWidget(DarkPort(store: store));
+    await pumpSilentGame(tester, store);
     await tester.pumpAndSettle();
   }
 
@@ -61,7 +62,7 @@ Future<void> playTutorial(
     await tester.pumpAndSettle();
   }
 
-  await tester.pumpWidget(DarkPort(store: store));
+  await pumpSilentGame(tester, store);
   await tester.pumpAndSettle();
   final screen = tester.getRect(find.byType(Scaffold));
   final insets = MediaQuery.paddingOf(tester.element(find.byType(Scaffold)));
@@ -177,6 +178,7 @@ Future<void> playTutorial(
     expect(advance, findsNothing);
     expect((await store.load())!.opened, contains(lesson.id));
     await press('Start lesson');
+    expect(find.byType(GameAudio), findsNothing);
     expect(guide, findsNothing);
     expect(tester.getRect(viewport), boardBounds);
     expect(tester.getRect(readings), readingsBounds);

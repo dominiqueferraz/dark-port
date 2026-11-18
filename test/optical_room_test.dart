@@ -1,5 +1,4 @@
 import 'package:dark_port/drafting_theme.dart';
-import 'package:dark_port/main.dart';
 import 'package:dark_port/optical_bay.dart';
 import 'package:dark_port/optical_deck.dart';
 import 'package:dark_port/puzzle_console.dart';
@@ -7,6 +6,7 @@ import 'package:dark_port/tutorial.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/pump_silent_game.dart';
 import 'support/puzzle_announcement.dart';
 import 'support/memory_store.dart';
 
@@ -15,7 +15,7 @@ void main() {
     tester,
   ) async {
     final store = MemoryStore()..failNextWrite = true;
-    await tester.pumpWidget(DarkPort(store: store));
+    await pumpSilentGame(tester, store);
     await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('New game'));
     await tester.tap(find.text('New game'));
@@ -43,7 +43,7 @@ void main() {
       }
 
       final store = MemoryStore();
-      await tester.pumpWidget(DarkPort(store: store));
+      await pumpSilentGame(tester, store);
       await tester.pumpAndSettle();
       expect(find.text('Continue game'), findsNothing);
       await tapText('New game');
@@ -164,7 +164,7 @@ void main() {
       await tester.pumpAndSettle();
 
       await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpWidget(DarkPort(store: store));
+      await pumpSilentGame(tester, store);
       await tester.pumpAndSettle();
       await tapText('Continue game');
       await tester.pumpAndSettle();

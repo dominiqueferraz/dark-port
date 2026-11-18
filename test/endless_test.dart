@@ -3,7 +3,6 @@ import 'package:dark_port/drafting_grid.dart';
 import 'package:dark_port/drafting_theme.dart';
 import 'package:dark_port/endless_levels.dart';
 import 'package:dark_port/game_save.dart';
-import 'package:dark_port/main.dart';
 import 'package:dark_port/signal_board.dart';
 import 'package:dark_port/signal_board_state.dart';
 import 'package:dark_port/tutorial.dart';
@@ -12,6 +11,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/pump_silent_game.dart';
 import 'support/puzzle_announcement.dart';
 import 'support/memory_store.dart';
 
@@ -322,7 +322,7 @@ void main() {
     final feed = find.byKey(const ValueKey('signal-device-feed'));
     final broadcaster = find.byKey(const ValueKey('signal-device-broadcaster'));
 
-    await tester.pumpWidget(DarkPort(store: store));
+    await pumpSilentGame(tester, store);
     await tester.pumpAndSettle();
     await tap(find.text('Endless'));
     expect(numbered(1), findsNothing);
@@ -411,7 +411,7 @@ void main() {
     store.data!.remove('endlessResults');
 
     await tester.pumpWidget(const SizedBox.shrink());
-    await tester.pumpWidget(DarkPort(store: store));
+    await pumpSilentGame(tester, store);
     await tester.pumpAndSettle();
     expect(find.text('Continue game'), findsNothing);
     await tap(find.text('Endless'));
@@ -589,7 +589,7 @@ Future<void> playNewEndlessBoards(WidgetTester tester, GameStore store) async {
     }
   }
 
-  await tester.pumpWidget(DarkPort(store: store));
+  await pumpSilentGame(tester, store);
   await tester.pumpAndSettle();
   await tap(find.text('Achievements'));
   expect(find.text('0 OF 3 EARNED'), findsOneWidget);

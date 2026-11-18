@@ -18,10 +18,16 @@ void main() {
 }
 
 class DarkPort extends StatefulWidget {
-  const DarkPort({super.key, this.store, this.settings});
+  const DarkPort({
+    super.key,
+    this.store,
+    this.settings,
+    this.audioEnabled = true,
+  });
 
   final GameStore? store;
   final SettingsStore? settings;
+  final bool audioEnabled;
 
   @override
   State<DarkPort> createState() => _DarkPortState();
@@ -78,7 +84,11 @@ class _DarkPortState extends State<DarkPort> {
             surfaceTint: Colors.transparent,
           ),
         ),
-        home: GameShell(store: _store, settingsLoaded: _settingsLoaded),
+        home: GameShell(
+          store: _store,
+          settingsLoaded: _settingsLoaded,
+          audioEnabled: widget.audioEnabled,
+        ),
       ),
     );
   }

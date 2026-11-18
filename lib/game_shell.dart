@@ -24,10 +24,16 @@ import 'tutorial_picker.dart';
 import 'tutorial_progress.dart';
 
 class GameShell extends StatefulWidget {
-  const GameShell({super.key, required this.store, this.settingsLoaded = true});
+  const GameShell({
+    super.key,
+    required this.store,
+    this.settingsLoaded = true,
+    this.audioEnabled = true,
+  });
 
   final GameStore store;
   final bool settingsLoaded;
+  final bool audioEnabled;
 
   @override
   State<GameShell> createState() => _GameShellState();
@@ -358,11 +364,15 @@ class _GameShellState extends State<GameShell> {
   });
 
   @override
-  Widget build(BuildContext context) => GameAudio(
-    onBoard: widget.settingsLoaded && !_title && _board != null,
-    settings: SheetLook.of(context).audio,
-    child: _console(context),
-  );
+  Widget build(BuildContext context) {
+    final console = _console(context);
+    if (!widget.audioEnabled) return console;
+    return GameAudio(
+      onBoard: widget.settingsLoaded && !_title && _board != null,
+      settings: SheetLook.of(context).audio,
+      child: console,
+    );
+  }
 
   Widget _console(BuildContext context) {
     final board = _board;

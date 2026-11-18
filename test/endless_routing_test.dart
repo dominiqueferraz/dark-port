@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:dark_port/endless_levels.dart';
 import 'package:dark_port/game_save.dart';
 import 'package:dark_port/lead_stock.dart';
-import 'package:dark_port/main.dart';
 import 'package:dark_port/optical_bay.dart';
 import 'package:dark_port/optical_deck.dart';
 import 'package:dark_port/signal_board.dart';
@@ -15,6 +14,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'support/memory_store.dart';
+import 'support/pump_silent_game.dart';
 import 'support/puzzle_announcement.dart';
 
 SignalLink _link(String from, String to, [int output = 0]) =>
@@ -422,7 +422,7 @@ void main() {
         await tap(find.byTooltip('Parts guide'));
       }
 
-      await tester.pumpWidget(DarkPort(store: store));
+      await pumpSilentGame(tester, store);
       await tester.pumpAndSettle();
       await open(7);
       expect(find.text('This puzzle'), findsOneWidget);
@@ -438,7 +438,7 @@ void main() {
       expect(visited.tutorialStarted, isFalse);
 
       await tester.pumpWidget(const SizedBox.shrink());
-      await tester.pumpWidget(DarkPort(store: store));
+      await pumpSilentGame(tester, store);
       await tester.pumpAndSettle();
       await open(6);
       expect(find.text('Relay'), findsOneWidget);
@@ -588,7 +588,7 @@ Future<void> playRoutingBoards(WidgetTester tester, GameStore store) async {
         OpticalDeckGeometry(board, bounds.size, fill: true).project(point);
   }
 
-  await tester.pumpWidget(DarkPort(store: store));
+  await pumpSilentGame(tester, store);
   await tester.pumpAndSettle();
   await tap(find.text('Endless'));
   await tap(find.byKey(const ValueKey('endless-group-1')));
