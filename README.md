@@ -32,9 +32,17 @@ Author the fixture with the existing optical or wired board types. Register a st
 
 ## Play on iPhone
 
-Run `flutter pub get` and `flutter devices` from this directory. With an iPhone connected and Developer Mode enabled, choose your signing team in `ios/Runner.xcworkspace` and run `flutter run -d <device-id>`. The project uses a provisional `com.example.darkPort` bundle identifier for local development.
+Run `flutter pub get` and `flutter devices` from this directory. With an iPhone connected and Developer Mode enabled, sign in to the developer team in Xcode Settings → Accounts and run `flutter run -d <device-id>`. The iOS bundle ID and Android application ID are both `group.kleinfour.games.darkport`.
 
 The same `flutter run -d <device-id>` command targets a booted iOS simulator or an Android device listed by Flutter.
+
+## Archive for iPhone and iPad
+
+Open `ios/DarkPort.xcworkspace` in Xcode. Device builds use automatic development signing with the team in `ios/Flutter/Signing.xcconfig`. To select a different team locally, set `DEVELOPMENT_TEAM` in the ignored `ios/Flutter/Signing.local.xcconfig`.
+
+Run `bin/archive` from the checkout. It builds and verifies a development-signed release archive in `build/ios/archives/`. Use `--open` to open it in Organizer for App Store Connect distribution. The shared history in the main checkout's `build/ios/archive-history.jsonl` records attempts and successful archives across worktrees.
+
+The next build number follows the highest saved or successfully archived number. Successful automatic increments update `pubspec.yaml`. Use `--major`, `--minor`, or `--patch` to increment the release version. Explicit `--version` and `--build-number` overrides persist only with `--save-version`. The shared scheme is named `Runner` so Flutter commands work without a flavor argument.
 
 ## Verify
 

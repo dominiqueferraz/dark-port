@@ -1,4 +1,4 @@
-package com.example.dark_port
+package group.kleinfour.games.darkport
 
 import io.flutter.embedding.android.FlutterActivity
 

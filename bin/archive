@@ -1,0 +1,192 @@
+#!/usr/bin/env python3
+"""Build and verify a development-signed Dark Port iOS archive."""
+
+import argparse
+from datetime import datetime, timezone
+import fcntl
+import json
+import os
+from pathlib import Path
+import plistlib
+import re
+import subprocess
+import sys
+from tempfile import NamedTemporaryFile
+from time import monotonic
+
+
+ROOT = Path(__file__).resolve().parents[1]
+PUBSPEC = ROOT / "pubspec.yaml"
+VERSION_LINE = re.compile(r"(?m)^version: (\d+\.\d+\.\d+)\+([1-9]\d*)$")
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description=__doc__)
+    version = parser.add_mutually_exclusive_group()
+    version.add_argument("--version", help="Override the Flutter version for this archive")
+    for part in ("major", "minor", "patch"):
+        version.add_argument(f"--{part}", dest="bump", action="store_const", const=part,
+                             help=f"Increment the {part} version component")
+    parser.add_argument("--build-number", type=int, help="Override the next build number")
+    parser.add_argument("--save-version", action="store_true", help="Save explicit overrides to pubspec.yaml")
+    parser.add_argument("--open", action="store_true", help="Open the finished archive in Xcode Organizer")
+    args = parser.parse_args()
+    if args.version is not None and not re.fullmatch(r"\d+\.\d+\.\d+", args.version):
+        parser.error("--version requires three numeric components")
+    if args.build_number is not None and args.build_number < 1:
+        parser.error("--build-number must be positive")
+    return args
+
+
+def pubspec_version(contents):
+    versions = VERSION_LINE.findall(contents)
+    if len(versions) != 1:
+        raise ValueError("Expected a single version: MAJOR.MINOR.PATCH+BUILD in pubspec.yaml")
+    version, number = versions[0]
+    return version, int(number)
+
+
+def next_version(version, args):
+    if args.version is not None:
+        return args.version
+    if args.bump is None:
+        return version
+    components = [int(part) for part in version.split(".")]
+    index = ("major", "minor", "patch").index(args.bump)
+    components[index] += 1
+    components[index + 1:] = [0] * (2 - index)
+    return ".".join(map(str, components))
+
+
+def git(*args):
+    return subprocess.check_output(["git", *args], cwd=ROOT, text=True).strip()
+
+
+def now():
+    return datetime.now(timezone.utc)
+
+
+def record(history, details, status, **extra):
+    with history.open("a", encoding="utf-8") as stream:
+        row = dict(details, status=status, time=now().isoformat(), **extra)
+        stream.write(json.dumps(row) + "\n")
+
+
+def run(command):
+    subprocess.run(command, cwd=ROOT, check=True)
+
+
+def verify_archive(archive, version, number):
+    with (archive / "Info.plist").open("rb") as metadata:
+        app_path = plistlib.load(metadata)["ApplicationProperties"]["ApplicationPath"]
+    if app_path != "Applications/DarkPort.app":
+        raise ValueError(f"Unexpected archived product: {app_path}")
+    app = archive / "Products" / app_path
+    with (app / "Info.plist").open("rb") as metadata:
+        info = plistlib.load(metadata)
+    for key, expected in {
+        "CFBundleIdentifier": "group.kleinfour.games.darkport",
+        "CFBundleShortVersionString": version,
+        "CFBundleVersion": str(number),
+    }.items():
+        if info.get(key) != expected:
+            raise ValueError(f"Expected {key}={expected} in the archive, got {info.get(key)}")
+    if not (app / "embedded.mobileprovision").is_file():
+        raise ValueError("The archived app has no embedded provisioning profile.")
+    run(["codesign", "--verify", "--deep", "--strict", str(app)])
+
+
+def save_version(original, version, number):
+    contents = PUBSPEC.read_text(encoding="utf-8")
+    if pubspec_version(contents) != original:
+        raise ValueError("pubspec.yaml version changed during archiving. The archive was retained.")
+    with NamedTemporaryFile(mode="w", encoding="utf-8", dir=PUBSPEC.parent, delete=False) as stream:
+        pending = Path(stream.name)
+        try:
+            stream.write(VERSION_LINE.sub(f"version: {version}+{number}", contents))
+            stream.flush()
+            pending.chmod(PUBSPEC.stat().st_mode & 0o777)
+            pending.replace(PUBSPEC)
+        finally:
+            pending.unlink(missing_ok=True)
+
+
+def archive_app(args, history):
+    original_version = pubspec_version(PUBSPEC.read_text(encoding="utf-8"))
+    saved_version, saved_number = original_version
+    version = next_version(saved_version, args)
+    previous_builds = [saved_number]
+    if history.exists():
+        with history.open(encoding="utf-8") as stream:
+            for line in stream:
+                entry = json.loads(line)
+                if entry["status"] == "passed":
+                    previous_builds.append(entry["build"])
+    number = args.build_number if args.build_number is not None else max(previous_builds) + 1
+
+    if args.bump in ("major", "minor"):
+        try:
+            answer = input(f"Archive Dark Port {version} ({number})? [y/N] ")
+        except EOFError:
+            answer = ""
+        if answer.lower().strip() not in ("y", "yes"):
+            print("Archive canceled.")
+            return
+
+    stamp = now().strftime("%Y%m%dT%H%M%S%fZ")
+    archive = ROOT / "build/ios/archives" / stamp / "DarkPort.xcarchive"
+    archive.parent.mkdir(parents=True)
+    details = {"version": version, "build": number, "commit": git("rev-parse", "HEAD"),
+               "archive": str(archive), "dirty": bool(git("status", "--porcelain"))}
+    record(history, details, "started")
+    started = monotonic()
+    try:
+        print(f"Preparing Flutter release {version} ({number})", flush=True)
+        flutter = os.environ.get("FLUTTER", "flutter")
+        run([flutter, "build", "ios", "--release", "--config-only", "--no-codesign",
+             f"--build-name={version}", f"--build-number={number}"])
+        print("Archiving DarkPort with automatic development signing", flush=True)
+        run(["xcodebuild", "-quiet", "-workspace", "ios/DarkPort.xcworkspace", "-scheme", "Runner",
+             "-configuration", "Release", "-destination", "generic/platform=iOS",
+             "-derivedDataPath", str(ROOT / "build/ios/archive-derived"),
+             "-archivePath", str(archive), "-allowProvisioningUpdates", "archive"])
+        verify_archive(archive, version, number)
+        if git("rev-parse", "HEAD") != details["commit"]:
+            raise ValueError("HEAD changed during archiving. The archive was retained.")
+    except (OSError, ValueError, KeyError, subprocess.CalledProcessError, KeyboardInterrupt):
+        record(history, details, "failed", elapsed_seconds=round(monotonic() - started))
+        raise
+
+    record(history, details, "passed", elapsed_seconds=round(monotonic() - started))
+    print(f"Verified archive: {archive}", flush=True)
+    if args.save_version or (args.version is None and args.build_number is None):
+        if (version, number) != original_version:
+            save_version(original_version, version, number)
+    if args.open:
+        run(["open", str(archive)])
+
+
+def main():
+    args = parse_args()
+    common_dir = Path(git("rev-parse", "--path-format=absolute", "--git-common-dir"))
+    history = common_dir.parent / "build/ios/archive-history.jsonl"
+    history.parent.mkdir(parents=True, exist_ok=True)
+    with history.with_suffix(".lock").open("a", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError as error:
+            raise ValueError("A Dark Port archive is already running.") from error
+        archive_app(args, history)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except subprocess.CalledProcessError as error:
+        print(f"Archive failed while running {Path(error.cmd[0]).name}. See the output above.", file=sys.stderr)
+        sys.exit(error.returncode)
+    except (OSError, ValueError, KeyError) as error:
+        print(f"Archive failed: {error}", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        sys.exit(130)
