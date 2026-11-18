@@ -125,6 +125,17 @@ List<Widget> _wiredParts(BuildContext context) => [
     dualInput: true,
   ),
   _wiredPart(
+    'Broadcaster',
+    SignalDeviceKind.broadcaster,
+    'Sends its wired input over the air to antennas within reach.',
+  ),
+  _wiredPart(
+    'Antenna',
+    SignalDeviceKind.antenna,
+    'Receives radio signals on its channel. Walls can block the path.',
+    fixed: true,
+  ),
+  _wiredPart(
     'Fixed component',
     SignalDeviceKind.transmitter,
     'Marks a bolted part. Loose wired parts can be dragged or flipped with a long press.',

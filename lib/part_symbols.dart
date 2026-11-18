@@ -51,6 +51,36 @@ abstract class PartSymbols {
     SheetStyle style, {
     required bool lit,
     required bool alarm,
+  }) {
+    if (!alarm) {
+      _paintLatch(canvas, size, style, lit: lit);
+      return;
+    }
+    final s = size.shortestSide;
+    final c = size.center(Offset.zero);
+    // The triangle points toward the incoming beam. Its back and target
+    // align with the other wall receivers.
+    final housing = Path()
+      ..addPolygon([
+        c + Offset(-s * .24, 0),
+        c + Offset(s * .22, -s * .28),
+        c + Offset(s * .22, s * .28),
+      ], true);
+    final filled = this == pictogram;
+    canvas.drawPath(housing, _fill(filled ? style.ink : style.paper));
+    canvas.drawPath(housing, _stroke(style.ink, 1.3));
+    final target = c + Offset(s * .07, 0);
+    if (filled) {
+      canvas.drawCircle(target, s * .12, _fill(style.paper));
+    }
+    _target(canvas, target, s * .08, style, lit, style.alarmBeam);
+  }
+
+  void _paintLatch(
+    Canvas canvas,
+    Size size,
+    SheetStyle style, {
+    required bool lit,
   });
 
   /// Draws the mounting plate for a wired part and returns its marking color.
@@ -220,24 +250,33 @@ class DraftingSymbols extends PartSymbols {
     final center = optic.center;
     final radius = optic.radius;
     final ink = _faded(style.ink, optic.opacity);
-    if (optic.fixed && optic.kind != OpticKind.mirror) {
-      final base = Rect.fromCircle(center: center, radius: radius);
+    if (optic.kind == OpticKind.splitter) {
+      final base = Rect.fromCircle(
+        center: center,
+        radius: radius * (optic.fixed ? 1 : .73),
+      );
       canvas.drawRect(base, _fill(style.paper));
       canvas.drawRect(base, _stroke(ink, 1.2));
-      final bolt = _stroke(ink, .7);
-      for (final corner in const [
-        Offset(-1, -1),
-        Offset(1, -1),
-        Offset(1, 1),
-        Offset(-1, 1),
-      ]) {
-        final p = center + corner * (radius * .76);
-        canvas.drawCircle(p, radius * .13, bolt);
-        canvas.drawLine(
-          p - Offset(radius * .13, 0),
-          p + Offset(radius * .13, 0),
-          bolt,
+      if (optic.fixed) {
+        _paintPins(
+          canvas,
+          base.deflate(radius * .22),
+          _stroke(ink, .7),
+          radius * .10,
         );
+      } else {
+        final travel = Path()..addRect(base.inflate(2.6));
+        final perimeter = travel.computeMetrics().single;
+        final dash = _stroke(ink, .9);
+        for (var i = 0; i < 16; i++) {
+          canvas.drawPath(
+            perimeter.extractPath(
+              perimeter.length * i / 16,
+              perimeter.length * (i + .5) / 16,
+            ),
+            dash,
+          );
+        }
       }
     } else {
       canvas.drawCircle(center, radius, _fill(style.paper));
@@ -257,18 +296,6 @@ class DraftingSymbols extends PartSymbols {
       }
     }
     final face = optic.kind == OpticKind.mirror ? optic.face * 1.1 : optic.face;
-    if (optic.kind == OpticKind.splitter) {
-      final other = Offset(face.dx, -face.dy);
-      canvas.drawPath(
-        Path()..addPolygon([
-          center - face,
-          center + other,
-          center + face,
-          center - other,
-        ], true),
-        _stroke(ink, .8),
-      );
-    }
     canvas.drawLine(center - face, center + face, _stroke(ink, 2.2));
   }
 
@@ -297,12 +324,11 @@ class DraftingSymbols extends PartSymbols {
   }
 
   @override
-  void paintReceiver(
+  void _paintLatch(
     Canvas canvas,
     Size size,
     SheetStyle style, {
     required bool lit,
-    required bool alarm,
   }) {
     final s = size.shortestSide;
     final c = size.center(Offset.zero);
@@ -321,10 +347,14 @@ class DraftingSymbols extends PartSymbols {
         ..lineTo(box.left, box.bottom),
       _stroke(style.ink, 1.3),
     );
-    if (alarm) {
-      canvas.drawLine(box.topRight, box.bottomLeft, _stroke(style.ink, .6));
-    }
-    _target(canvas, Offset(c.dx + s * .07, c.dy), s * .08, style, lit, alarm);
+    _target(
+      canvas,
+      Offset(c.dx + s * .07, c.dy),
+      s * .08,
+      style,
+      lit,
+      style.beam,
+    );
   }
 }
 
@@ -334,9 +364,8 @@ void _target(
   double radius,
   SheetStyle style,
   bool lit,
-  bool alarm,
+  Color color,
 ) {
-  final color = alarm ? style.alarmBeam : style.beam;
   canvas.drawCircle(center, radius, _fill(lit ? color : style.paper));
   canvas.drawCircle(center, radius, _stroke(lit ? color : style.ink, 1));
 }
@@ -489,12 +518,11 @@ class SchematicSymbols extends PartSymbols {
   }
 
   @override
-  void paintReceiver(
+  void _paintLatch(
     Canvas canvas,
     Size size,
     SheetStyle style, {
     required bool lit,
-    required bool alarm,
   }) {
     final s = size.shortestSide;
     final c = size.center(Offset.zero);
@@ -512,21 +540,18 @@ class SchematicSymbols extends PartSymbols {
       ..close();
     canvas.drawPath(dome, _fill(style.paper));
     canvas.drawPath(dome, _stroke(style.ink, 1.2));
-    if (alarm) {
-      canvas.drawArc(
-        Rect.fromCircle(center: Offset(back, c.dy), radius: radius * .72),
-        math.pi / 2,
-        math.pi,
-        false,
-        _stroke(style.ink, .6),
-      );
-    }
-    _target(canvas, Offset(c.dx + s * .07, c.dy), s * .07, style, lit, alarm);
+    _target(
+      canvas,
+      Offset(c.dx + s * .07, c.dy),
+      s * .07,
+      style,
+      lit,
+      style.beam,
+    );
   }
 }
 
-/// Bold filled icons: loose parts are ink discs, bolted parts ink squares
-/// with pins, each with the reflecting face cut out.
+/// Bold filled icons with round mirrors, square splitters and pins on mounts.
 class PictogramSymbols extends PartSymbols {
   const PictogramSymbols();
 
@@ -535,7 +560,7 @@ class PictogramSymbols extends PartSymbols {
   @override
   String get name => 'Pictogram';
   @override
-  String get description => 'Solid discs and pinned squares';
+  String get description => 'Solid shapes with mounting pins';
 
   @override
   Color paintWiredPlate(
@@ -567,38 +592,19 @@ class PictogramSymbols extends PartSymbols {
     final r = optic.radius;
     final ink = _faded(style.ink, optic.opacity);
     final paper = _faded(style.paper, optic.opacity);
-    if (optic.fixed) {
-      canvas.drawRRect(
-        RRect.fromRectAndRadius(
-          Rect.fromCircle(center: center, radius: r),
-          Radius.circular(r * .18),
-        ),
-        _fill(ink),
-      );
-      for (final corner in const [
-        Offset(-1, -1),
-        Offset(1, -1),
-        Offset(1, 1),
-        Offset(-1, 1),
-      ]) {
-        canvas.drawCircle(center + corner * (r * .7), r * .12, _fill(paper));
-      }
+    if (optic.kind == OpticKind.splitter) {
+      final cube = Rect.fromCircle(center: center, radius: r * .84);
+      canvas.drawRect(cube, _fill(ink));
     } else {
       canvas.drawCircle(center, r, _fill(ink));
     }
-    final face = optic.face;
-    if (optic.kind == OpticKind.splitter) {
-      final other = Offset(face.dx, -face.dy);
-      canvas.drawPath(
-        Path()..addPolygon([
-          center - face,
-          center + other,
-          center + face,
-          center - other,
-        ], true),
-        _stroke(paper, 1),
-      );
+    if (optic.fixed) {
+      final pin = _fill(paper);
+      for (final y in [-.64, .64]) {
+        canvas.drawCircle(center + Offset(0, r * y), r * .12, pin);
+      }
     }
+    final face = optic.face;
     canvas.drawLine(center - face, center + face, _stroke(paper, 2.6));
   }
 
@@ -622,12 +628,11 @@ class PictogramSymbols extends PartSymbols {
   }
 
   @override
-  void paintReceiver(
+  void _paintLatch(
     Canvas canvas,
     Size size,
     SheetStyle style, {
     required bool lit,
-    required bool alarm,
   }) {
     final s = size.shortestSide;
     final c = size.center(Offset.zero);
@@ -646,17 +651,13 @@ class PictogramSymbols extends PartSymbols {
       Rect.fromLTRB(outer.left, c.dy - s * .15, c.dx + s * .14, c.dy + s * .15),
       _fill(style.paper),
     );
-    if (alarm) {
-      canvas.drawRect(
-        Rect.fromLTRB(
-          outer.right - s * .05,
-          outer.top,
-          outer.right,
-          outer.bottom,
-        ),
-        _fill(style.alarmBeam),
-      );
-    }
-    _target(canvas, Offset(c.dx + s * .05, c.dy), s * .07, style, lit, alarm);
+    _target(
+      canvas,
+      Offset(c.dx + s * .05, c.dy),
+      s * .07,
+      style,
+      lit,
+      style.beam,
+    );
   }
 }

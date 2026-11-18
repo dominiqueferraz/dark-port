@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
@@ -121,7 +123,7 @@ class _ComponentDrawing extends CustomPainter {
     final marking = Paint()
       ..color = glyph
       ..isAntiAlias = true
-      ..strokeWidth = 1.9
+      ..strokeWidth = 2.1
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
@@ -146,21 +148,53 @@ class _ComponentDrawing extends CustomPainter {
         }
         canvas.drawPath(branches, marking);
       case SignalDeviceKind.receiver:
-        for (final x in [-7.0, 0.0, 7.0]) {
-          canvas.drawLine(Offset(x, -4), Offset(x, 4), marking);
-        }
-      case SignalDeviceKind.broadcaster:
-      case SignalDeviceKind.antenna:
-        canvas.drawCircle(const Offset(-4, 0), 1.8, Paint()..color = glyph);
-        for (final radius in [6.0, 11.0]) {
-          canvas.drawArc(
-            Rect.fromCircle(center: const Offset(-4, 0), radius: radius),
-            -.85,
-            1.7,
-            false,
+        if (device.dualInput) {
+          canvas.drawPath(
+            Path()..addPolygon(const [
+              Offset(0, -9),
+              Offset(11, 8),
+              Offset(-11, 8),
+            ], true),
             marking,
           );
+          canvas.drawLine(const Offset(0, -3), const Offset(0, .5), marking);
+          canvas.drawCircle(const Offset(0, 4), 1.1, Paint()..color = glyph);
+        } else {
+          for (final x in [-7.0, 0.0, 7.0]) {
+            canvas.drawLine(Offset(x, -5), Offset(x, 5), marking);
+          }
         }
+      case SignalDeviceKind.broadcaster:
+        // A mast with waves radiating away from its tip.
+        const tip = Offset(0, -3);
+        canvas.drawLine(tip, const Offset(0, 8), marking);
+        canvas.drawLine(const Offset(-4, 8), const Offset(4, 8), marking);
+        canvas.drawCircle(tip, 2.1, Paint()..color = glyph);
+        for (final side in [0.0, math.pi]) {
+          for (final radius in [6.0, 11.0]) {
+            canvas.drawArc(
+              Rect.fromCircle(center: tip, radius: radius),
+              side - .55,
+              1.1,
+              false,
+              marking,
+            );
+          }
+        }
+      case SignalDeviceKind.antenna:
+        // The dish catches the signal and reflects it to the feed.
+        const feed = Offset(-4, -4);
+        const mount = Offset(6, 3.5);
+        canvas.drawPath(
+          Path()
+            ..moveTo(6, -8)
+            ..quadraticBezierTo(13, 9, -8, 4),
+          marking,
+        );
+        canvas.drawLine(feed, mount, marking);
+        canvas.drawLine(mount, const Offset(6, 9), marking);
+        canvas.drawLine(const Offset(2, 9), const Offset(10, 9), marking);
+        canvas.drawCircle(feed, 2.1, Paint()..color = glyph);
       case SignalDeviceKind.attenuator:
         canvas.drawPath(
           Path()..addPolygon(const [
