@@ -31,9 +31,11 @@ class OpticalLesson extends TutorialLesson {
     required super.objective,
     required super.goal,
     super.notes,
+    this.wiredBoard,
   }) : super(title: board.title);
 
   final OpticalLevel board;
+  final SignalBoard? wiredBoard;
 }
 
 class WiredLesson extends TutorialLesson {

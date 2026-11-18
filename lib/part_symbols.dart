@@ -104,6 +104,88 @@ abstract class PartSymbols {
       all.firstWhere((symbols) => symbols.id == id, orElse: () => fallback);
 }
 
+class ConverterSymbol extends StatelessWidget {
+  const ConverterSymbol({
+    super.key,
+    this.input = const Offset(1, 0),
+    this.output = const Offset(1, 0),
+    this.transmitting = false,
+    this.movable = false,
+  });
+
+  final Offset input;
+  final Offset output;
+  final bool transmitting;
+  final bool movable;
+
+  @override
+  Widget build(BuildContext context) =>
+      CustomPaint(painter: _ConverterDrawing(this, context.sheet));
+}
+
+class _ConverterDrawing extends CustomPainter {
+  const _ConverterDrawing(this.part, this.sheet);
+
+  final ConverterSymbol part;
+  final SheetStyle sheet;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.center(Offset.zero);
+    final radius = size.shortestSide * .23;
+    final ink = Paint()
+      ..color = part.transmitting ? sheet.beam : sheet.ink
+      ..strokeWidth = 1.2
+      ..strokeCap = StrokeCap.round
+      ..style = PaintingStyle.stroke;
+    final input = part.input;
+    final output = part.output;
+    final cross = Offset(-input.dy, input.dx);
+    canvas.drawCircle(center, radius, Paint()..color = sheet.paper);
+    canvas.drawCircle(center, radius, ink);
+    final aperture = center - input * radius;
+    canvas.drawLine(
+      aperture - cross * radius * .65,
+      aperture + cross * radius * .65,
+      ink,
+    );
+    canvas.drawLine(aperture - input * radius * .6, aperture, ink);
+    canvas.drawCircle(center, radius * .16, Paint()..color = ink.color);
+    for (final scale in [.9, 1.36]) {
+      canvas.drawArc(
+        Rect.fromCircle(
+          center: center + output * radius * .4,
+          radius: radius * scale,
+        ),
+        output.direction - .60,
+        1.2,
+        false,
+        ink,
+      );
+    }
+    if (part.movable) {
+      ink.color = sheet.faint;
+      for (var i = 0; i < 12; i++) {
+        canvas.drawArc(
+          Rect.fromCircle(center: center, radius: radius * 1.95),
+          i * math.pi / 6,
+          .21,
+          false,
+          ink,
+        );
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ConverterDrawing oldDelegate) =>
+      part.input != oldDelegate.part.input ||
+      part.output != oldDelegate.part.output ||
+      part.transmitting != oldDelegate.part.transmitting ||
+      part.movable != oldDelegate.part.movable ||
+      sheet != oldDelegate.sheet;
+}
+
 /// An optical symbol drawn with the current sheet and symbol choices.
 class OpticalPartSymbol extends StatelessWidget {
   const OpticalPartSymbol.source({super.key})

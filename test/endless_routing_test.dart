@@ -13,6 +13,7 @@ import 'package:dark_port/tutorial_progress.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'support/board_arrangements.dart';
 import 'support/memory_store.dart';
 import 'support/pump_silent_game.dart';
 import 'support/puzzle_announcement.dart';
@@ -28,86 +29,6 @@ double? _power(SignalBoardState state, String target) => state
     ?.value
     .strength;
 
-Iterable<SignalBoardState> _wiredArrangements(SignalBoard board) sync* {
-  final moving = board.devices.where((device) => !device.fixed).toList();
-  final outputs = [
-    for (final part in board.devices)
-      for (var output = 0; output < part.outputs; output++) (part.id, output),
-  ];
-
-  Iterable<SignalBoardState> wire(
-    Map<String, SignalPoint> positions,
-    int index,
-    Map<SignalLink, LeadType> leads,
-  ) sync* {
-    final links = leads.keys.toList();
-    if (index == outputs.length) {
-      yield SignalBoardState(
-        board,
-        positions: positions,
-        links: links,
-        leadTypes: leads,
-      );
-      return;
-    }
-    yield* wire(positions, index + 1, leads);
-    final (source, output) = outputs[index];
-    for (final target in board.devices.where((part) => part.hasInput)) {
-      if (links.any((link) => link.to == target.id)) continue;
-      final link = _link(source, target.id, output);
-      for (final type in LeadType.values) {
-        if (board.linkIssue(
-              links,
-              link,
-              positions: positions,
-              type: type,
-              leadTypes: leads,
-            ) ==
-            null) {
-          yield* wire(positions, index + 1, {...leads, link: type});
-        }
-      }
-    }
-  }
-
-  Iterable<SignalBoardState> move(
-    int index,
-    Map<String, SignalPoint> positions,
-  ) sync* {
-    if (index == moving.length) {
-      yield* wire(positions, 0, {});
-      return;
-    }
-    final part = moving[index];
-    expect(part.canFlip, isFalse);
-    for (final mark in board.mountsFor(part.id)) {
-      if (board.canMove(part.id, mark.position, positions)) {
-        yield* move(index + 1, {...positions, part.id: mark.position});
-      }
-    }
-  }
-
-  yield* move(0, board.initialPositions);
-}
-
-Iterable<List<Optic>> _opticalArrangements(
-  OpticalLevel board, [
-  List<Optic> layout = const [],
-]) sync* {
-  if (layout.length == board.initial.length) {
-    yield layout;
-    return;
-  }
-  final optic = board.initial[layout.length];
-  for (final mark in board.mounts[optic.id]!) {
-    final moved = optic.at(mark.position);
-    if (board.canPlace(moved, layout)) {
-      yield* _opticalArrangements(board, [...layout, moved]);
-      yield* _opticalArrangements(board, [...layout, moved.rotate()]);
-    }
-  }
-}
-
 void main() {
   test(
     'exhausts all authored mounts, sockets, stock and diagonals on 1.6–1.10',
@@ -119,7 +40,7 @@ void main() {
         (EndlessLevel.quietSector, 6, [35, 50, null]),
       ]) {
         final lesson = level.lesson! as WiredLesson;
-        final states = _wiredArrangements(lesson.board).toList();
+        final states = wiredArrangements(lesson.board).toList();
         expect(states, hasLength(count), reason: level.title);
         final win = states.where((state) => state.solved).single;
         expect(
@@ -134,7 +55,7 @@ void main() {
         (EndlessLevel.splitAroundTheBaffle, 8, [50, 50]),
       ]) {
         final lesson = level.lesson! as OpticalLesson;
-        final states = _opticalArrangements(lesson.board).toList();
+        final states = opticalArrangements(lesson.board).toList();
         expect(states, hasLength(count));
         final win = states
             .map((layout) => GameSave(lesson, layout: layout))
@@ -354,13 +275,13 @@ void main() {
     );
     final open = copy(corner, blocks: []);
     expect(
-      _opticalArrangements(open)
+      opticalArrangements(open)
           .where((layout) => traceOptics(open, layout).solves(open)),
       hasLength(1),
     );
 
     final split = splitAroundBaffleLesson.board;
-    final winning = _opticalArrangements(split)
+    final winning = opticalArrangements(split)
         .singleWhere((layout) => traceOptics(split, layout).solves(split));
     expect(traceOptics(split, [winning.last]).receivedPower(0), 1);
     expect(traceOptics(split, [winning.last]).solves(split), isFalse);

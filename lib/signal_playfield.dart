@@ -447,7 +447,7 @@ class _SignalAnnotations extends CustomPainter {
       if (balloon == null) continue;
       paintPartBalloon(
         canvas,
-        number: index + 1,
+        number: '${index + 1}',
         anchor: anchor,
         center: balloon.center,
         reach: balloon.reach,

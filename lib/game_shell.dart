@@ -44,6 +44,7 @@ class _GameShellState extends State<GameShell> {
   GameSave? _board;
   bool _replaying = false;
   bool _showLessonGuide = false;
+  bool _showOpticalSection = false;
   bool _loading = true;
   bool _title = true;
   bool _endless = false;
@@ -235,6 +236,7 @@ class _GameShellState extends State<GameShell> {
       _replaying = replay;
       _showLessonGuide =
           endlessLevel == null && !previous.opened.contains(lesson.id);
+      _showOpticalSection = false;
       _board = replay ? GameSave(lesson) : saved ?? GameSave(lesson);
       _lessonSession++;
     });
@@ -305,6 +307,15 @@ class _GameShellState extends State<GameShell> {
       onBack: _showPicker,
       backIcon: _endless ? Icons.account_tree_outlined : Icons.arrow_back,
       onStartLesson: _showLessonGuide ? _startLesson : null,
+      circuits: board.opticalBoard != null && board.signal != null
+          ? (
+              opticalSelected: _showOpticalSection,
+              wiredSolved: board.signal!.solved,
+              opticalSolved: board.opticsSolved,
+              selectOptical: (optical) =>
+                  setState(() => _showOpticalSection = optical),
+            )
+          : null,
       advance: progressing
           ? (
               label: next == null ? 'Finish tutorial' : 'Next lesson',
@@ -317,29 +328,64 @@ class _GameShellState extends State<GameShell> {
       for (final revealed
           in _progress?.openedLessons ?? const <TutorialLesson>[])
         ...switch (revealed) {
-          OpticalLesson(:final board) => opticalGuideParts(board),
+          OpticalLesson(:final board, :final wiredBoard) => {
+            ...opticalGuideParts(board),
+            if (wiredBoard != null) ...signalGuideParts(wiredBoard),
+          },
           WiredLesson(:final board) => signalGuideParts(board),
         },
     };
-    return switch (lesson) {
-      OpticalLesson() => OpticalRoom(
-        key: ValueKey(_lessonSession),
-        level: lesson.board,
-        layout: board.layout,
-        brief: brief,
-        navigation: navigation,
-        revealedParts: revealedParts,
-        onChange: (layout) => _changed(GameSave(lesson, layout: layout)),
-      ),
-      WiredLesson() => SignalRoom(
-        key: ValueKey(_lessonSession),
-        boardState: board.signal!,
-        brief: brief,
-        navigation: navigation,
-        revealedParts: revealedParts,
-        onChange: (state) => _changed(GameSave.fromSignal(lesson, state)),
-      ),
-    };
+    switch (lesson) {
+      case OpticalLesson():
+        final signal = board.signal;
+        final optical = OpticalRoom(
+          level: lesson.board,
+          layout: board.layout,
+          brief: brief,
+          navigation: navigation,
+          revealedParts: revealedParts,
+          otherSectionSolved: signal?.solved ?? true,
+          otherSectionParts: signal == null
+              ? const {}
+              : signalGuideParts(signal.board),
+          onChange: (layout) => _changed(
+            signal == null
+                ? GameSave(lesson, layout: layout)
+                : GameSave.fromSignal(lesson, _board!.signal!, layout: layout),
+          ),
+        );
+        if (signal == null) {
+          return KeyedSubtree(key: ValueKey(_lessonSession), child: optical);
+        }
+        return IndexedStack(
+          key: ValueKey(_lessonSession),
+          index: _showOpticalSection ? 1 : 0,
+          sizing: StackFit.expand,
+          children: [
+            SignalRoom(
+              boardState: signal,
+              brief: brief,
+              navigation: navigation,
+              revealedParts: revealedParts,
+              otherSectionSolved: board.opticsSolved,
+              otherSectionParts: opticalGuideParts(lesson.board),
+              onChange: (state) => _changed(
+                GameSave.fromSignal(lesson, state, layout: _board!.layout),
+              ),
+            ),
+            optical,
+          ],
+        );
+      case WiredLesson():
+        return SignalRoom(
+          key: ValueKey(_lessonSession),
+          boardState: board.signal!,
+          brief: brief,
+          navigation: navigation,
+          revealedParts: revealedParts,
+          onChange: (state) => _changed(GameSave.fromSignal(lesson, state)),
+        );
+    }
   }
 
   void _retry() {

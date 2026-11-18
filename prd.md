@@ -8,7 +8,7 @@ Dark Port is an offline landscape puzzle game for iOS and Android. Players route
 
 **Endless is the current product and development focus.** It opens directly from the title screen on a fresh save. Ship authored puzzles in numbered groups, starting with Signal Routing. A group introduces a family of related mechanisms, gives each a chance to matter on its own, and then combines them in harder boards. The campaign comes later and will reuse the tested boards and components for the missing crew story, the Station Map and the station cycles.
 
-**Current build.** The Tutorial has eight required lessons across Sealed Bay and Test Line plus the optional Four-way fan-out branch. Endless has a group path and a separate puzzle path for group 1. All 20 Signal Routing slots appear on that path. Levels **1.1–1.10** are playable with independent saves, replays and Solution Stars. Slots **1.11–1.20** are planned.
+**Current build.** The Tutorial has eight required lessons across Sealed Bay and Test Line plus the optional Four-way fan-out branch. All 20 Signal Routing puzzles are playable in Endless with independent saves, replays and Solution Stars.
 
 **Status.** *Playable* means the board or part is in the mobile build. *Planned* means it has an assigned slot and still needs authoring or integration. *Trial* means it has a reserved slot and a mechanism to test before it graduates to the playable path. Slot numbers identify positions in Endless. The deferred campaign uses its own chapter and board numbers.
 
@@ -35,7 +35,7 @@ Grant credit from committed play and read it from local progress. The starter aw
 ### Navigation and progress
 
 - **Title → Endless groups → group puzzles → board.** Groups form a horizontally scrolling linked path of numbered squares. Selecting a group opens a separate screen with another linked path, using the Tutorial’s boxes, connectors and branch geometry. Group 1 opens **Signal Routing**. Group 2 joins the group path when it is added.
-- **Numbering.** A square on the puzzle path uses the group and slot, such as **1.1** or **1.20**. Display the same number on the puzzle drawing. An authored variant keeps its own slot and branches from its parent back into the main path. Only a playable fixture can be opened. Group 1 shows its planned slots as locked.
+- **Numbering.** A square on the puzzle path uses the group and slot, such as **1.1** or **1.20**. Display the same number on the puzzle drawing. An authored variant keeps its own slot and branches from its parent back into the main path. Only a playable fixture can be opened.
 - **Teaching order.** The main path goes from a demonstration to constrained applications and a capstone. An optional branch can reuse its parent’s mechanism with one change. A required level may assume only rules taught on the required path or in its own brief. For example, 1.2 can demonstrate channel rejection, while required boards that need channel matching must cue it themselves until the player meets Marked Sockets in group 2.
 - **Standalone fixtures.** Issue required leads, parts and loaner blueprints in the puzzle. Give Dispatch Code its header and Dark Port its channel, header and optical targets in the brief or test panel. Keep these values and the solution checks aligned between the two uses of the fixture. Track campaign discoveries separately from Endless completion.
 - **Saves and replay.** Use stable board and fixture revision IDs for saves. Save the latest committed arrangement and completion locally. A completed board reopens from its initial arrangement for replay. Preserve Endless progress when the player starts a new Tutorial. Add groups in app updates and keep prior progress and replays usable offline.
@@ -59,16 +59,16 @@ The six groups below assign the existing puzzle designs to Endless. Groups 2–6
 | 1.8 | **Quiet Sector** | **Playable.** Reach two targets while keeping a protected receiver quiet on channel 12. |
 | 1.9 | **Corner Mirror** | **Playable.** Find the mirror mount and diagonal that turn 100 u around a baffle. |
 | 1.10 | **Split Around the Baffle** | **Playable.** Send 50 u to each of two directional sensors. |
-| 1.11 | Both Faces | Steer opposing beams with the two sides of one mirror. |
-| 1.12 | Two Branches, Two Bends | Route each half of a beam around a different end of an obstacle. |
-| 1.13 | First Conversion | Use one optical branch locally and convert the other to radio. |
-| 1.14 | Mesh Window | Choose the mesh launch lane. Concrete blocks the competing path. |
-| 1.15 | Around the Shield | Choose a launch lane by testing obstructions and remaining strength. |
-| 1.16 | Split Twice | Reserve a full half-beam for a remote receiver and divide the other half locally. |
-| 1.17 | Crossed Channels | Steer light into the converters whose channel labels match their antennas. |
-| 1.18 | Service and Inspection | Combine cable corridors with optical branches. Three routes are the design target. |
-| 1.19 | One Mirror, Two Windows | Deliver opposing beams to their source-keyed converters. |
-| 1.20 | Dual Handoff | Solve both local sensors and both remote receivers with a shared mirror. |
+| 1.11 | **Both Faces** | **Playable.** Steer opposing beams with the two sides of one mirror. |
+| 1.12 | **Two Branches, Two Bends** | **Playable.** Route each half of a beam around a different end of an obstacle. |
+| 1.13 | **First Conversion** | **Playable.** Use one optical branch locally and convert the other to radio. |
+| 1.14 | **Mesh Window** | **Playable.** Choose the mesh launch lane. Concrete blocks the competing path. |
+| 1.15 | **Around the Shield** | **Playable.** Choose a launch lane by testing obstructions and remaining strength. |
+| 1.16 | **Split Twice** | **Playable.** Reserve a full half-beam for a remote receiver and divide the other half locally. |
+| 1.17 | **Crossed Channels** | **Playable.** Steer light into the converters whose channel labels match their antennas. |
+| 1.18 | **Service and Inspection** | **Playable.** Complete both the wired service and optical inspection circuits. Three verified cable corridors earn separate Solution Stars. |
+| 1.19 | **One Mirror, Two Windows** | **Playable.** Deliver opposing beams to their source-keyed converters. |
+| 1.20 | **Dual Handoff** | **Playable.** Solve both local sensors and both remote receivers with a shared mirror. |
 
 #### Group 2 · Wired Control and Workshop
 
@@ -150,10 +150,9 @@ The playable Tutorial opening remains available from the title screen. Its board
 
 ### Now · Signal Routing and an installed build
 
-1. Playtest 1.1–1.10 on an iPhone and verify the same flow on Android. Watch whether players can distinguish a cabled feed from the wireless hop, recognise the coverage footprint and diagnose channel mismatch, concrete and radio loss. Include the lead symbols and route previews in 1.6–1.7, the protected receiver in 1.8, and the direction and power readings in 1.9–1.10.
-2. Build 1.11–1.12 with the existing optical tools, and add the two-sided mirror as an instrument with one shared diagonal. Build 1.13–1.20 using the converter and both material rules. Test the source-pairing constraint at 1.19 before 1.20 uses it.
-3. Prove each new fixture’s Solution Star count against the game evaluator. Keep a winning replay and failing near misses for each board. The game evaluators verify 1.1–1.10, including both routes through 1.4.
-4. Validate the whole group from a fresh install and from an existing save. On iOS and Android test starting, resuming, solving and replaying, and reading a blocked, weak or mismatched route with sound and animation off.
+1. Playtest the full Signal Routing group on iPhone and Android. Include the lead previews in 1.6–1.7, the protected receiver in 1.8, the direction and power readings in 1.9–1.12, and the converter and material diagnostics in 1.13–1.20.
+2. Test starting, resuming and replaying from a fresh install and an existing save. Verify that the player can read a blocked, weak or mismatched route with sound and animation off.
+3. Use the game evaluator to verify the [Signal Routing fixture proofs](endless-level-register.md#app-fixture-proofs--e11e20). On 1.18, complete the wired and optical views in either order. Both circuits must pass on the same saved arrangement, and replay must keep every earned corridor star.
 
 ### Next · More Endless groups
 
@@ -180,7 +179,7 @@ These rules hold on every board. Groups introduce new parts while reusing these 
 
 | Mode | Used by | Behavior |
 | --- | --- | --- |
-| **On commit** | The Tutorial, Signal Routing 1.1–1.10, 2.1 Long Reach, and optics in Coherent Optics and Power | Every committed edit re-evaluates the route. Previews predict the result during a drag. A solved arrangement completes the board. |
+| **On commit** | The Tutorial, Signal Routing 1.1–1.20, 2.1 Long Reach, and optics in Coherent Optics and Power | Every committed edit re-evaluates the route. Previews predict the result during a drag. A solved arrangement completes the board. |
 | **On Send** | Fixtures that explicitly use Send. 2.2 Switchboard teaches ordered selector sends. | Edits change only the arrangement. **Send** evaluates once from the committed arrangement and applies its effects once. Each destination shows what arrived on the last send until the next edit or send. Inline readouts may preview the route before sending. |
 
 Devices resolve their same-send inputs together and then deliver downstream. Ordinary boards reject cycles.
@@ -363,13 +362,13 @@ The slot catalogue assigns these parts to Endless fixtures. Test each planned ru
 
 | Part | Stage | Mechanics | Visualisation |
 | --- | --- | --- | --- |
-| Baffle, concrete and mesh | Playable baffles and radio-blocking concrete. Mesh is planned. | The baffle blocks light and occupies space. In mixed fixtures, concrete blocks both light and radio and mesh blocks light while passing radio. | Solid hatched barriers and an open grid for mesh. Mark the stop at the face where a path is blocked. |
-| Optical-to-radio converter and antenna target | Trial | Converts an accepted beam to a straight radio path in the authored direction. The antenna reports arrival. Radio ignores light-only parts and passes the mesh in its fixture. | Optical aperture joined to a radio glyph. Use a dashed radio path and a labelled antenna socket. |
+| Baffle, concrete and mesh | Playable | The baffle blocks light and occupies space. In mixed fixtures, concrete blocks both light and radio and mesh blocks light while passing radio. | Solid hatched barriers and an open grid for mesh. Mark the stop at the face where a path is blocked. |
+| Optical-to-radio converter and antenna target | Playable in 1.13–1.20 | Converts an accepted beam to a straight radio path in the authored direction. The antenna reports arrival. Keyed converters in 1.19–1.20 check the originating laser. Radio ignores light-only parts and passes the mesh in its fixture. | Optical aperture joined to a radio glyph. Use a dashed radio path and a labelled antenna socket. |
 | Observer or path marker | Trial | Makes marked and unmarked paths distinguishable. Classical targets sum their intensities across marks. The quantum fixture shows the corresponding loss of interference in its balanced setup. | Marker ring, labelled path pattern and violet accent. The pattern and text identify the mark with colour off. |
 | Amplifier | Trial | Multiplies incident intensity by four and preserves phase in **Door Cutting**. | `×4` gain plate with incoming and outgoing light readings. |
 | Rated mirror | Trial | Reflects as usual at up to 250 incident units. A reading above 250 fails the attempt in **Door Cutting**. | Mirror with a `250 u max` plate and an overload mark. |
 | Power-rated door and side output | Trial | The door absorbs light and opens at 350 incident units or more. The side output reports residual light. | Door threshold meter and a separate side-output reading. |
-| Broadcaster and wireless receiver | Playable in 1.1–1.3 and 1.5–1.8 | Broadcaster takes one wired input and transmits across a diamond-shaped Manhattan coverage area, inclusive of the boundary. Signal Routing subtracts 5 u per grid step. Protected receivers in 1.8 require zero delivery on the monitored channel. | Coverage diamond, dashed radio traces and receiver channel in the inspector. |
+| Broadcaster and wireless receiver | Playable in 1.1–1.3 and 1.5–1.8 | Broadcaster takes one wired input and transmits across a diamond-shaped Manhattan coverage area, inclusive of the boundary. Signal Routing subtracts 5 u per grid step. The protected receiver in 1.8 requires zero delivery on the monitored channel. The guard in 1.18 allows signal below 35 u. | Coverage diamond, dashed radio traces and receiver channel in the inspector. |
 | Radio transceiver | Trial | **Transmit** takes a cable input and emits a directional radio hop. **Receive** accepts a directional radio hop and supplies a cable output. Each mode carries the same source, channel, strength and payload through the conversion. | Label Cable and Radio ports and show the selected mode and direction. |
 | Radio repeater | Trial | Accepts a valid radio delivery and retransmits it in its set direction on the same send. The second hop starts at the repeater and uses its own reach. Source, channel and payload are preserved, with an authored output strength. Both hops must clear their path checks. | Two labelled radio legs with independent reach readings. Mark the leg that is blocked, out of reach or waiting for input. |
 | Packet repeater | Trial | Accepts one valid wired payload and emits two copies through independent wired ports on the same send. Preserves source, channel and word. Each output has an authored strength and reach. | Show a single incoming word and two identical output words with distinct port readings. |
@@ -398,7 +397,7 @@ The route determines what can carry a delivery and what can stop it. Laser light
 | --- | --- | --- |
 | **Free-space light** | Playable | The ray travels straight between optics, turns at a mirror and stops at the bay’s baffle. A sensor must receive it from the authored direction. |
 | **Wired signal** | Playable | A cable links specific ports within their reach. A connected cable can stop delivering when a part moves out of reach. Receivers apply their channel, source and strength checks to an arriving signal. |
-| **Directional radio** | Trial | A hop must reach a compatible antenna along a straight line. A concrete shield stops light and radio in these fixtures. The mesh fixture stops light and passes radio. Display the material’s blocked paths on inspection and draw a stop marker where the hop meets a shield. |
+| **Directional radio** | Playable | A hop must reach a compatible antenna along a straight line. A concrete shield stops light and radio in these fixtures. The mesh fixture stops light and passes radio. Display the material’s blocked paths on inspection and draw a stop marker where the hop meets a shield. |
 | **Radio coverage** | Playable | A compatible receiver can be reached anywhere in the footprint, including the boundary. A direct radio path crossing the concrete shield in Blind Corner fails even inside the footprint. An antenna can be reached from an origin beyond the shield’s edge. |
 | **Backhaul between stations** | Trial | A fixed pair carries an accepted delivery between two local radio cells. Inspect each local path separately from the fixed link. |
 

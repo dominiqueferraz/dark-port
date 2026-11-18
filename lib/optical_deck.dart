@@ -8,6 +8,8 @@ import 'drafting_theme.dart';
 import 'part_symbols.dart';
 import 'sheet_style.dart';
 import 'optical_bay.dart';
+import 'signal_board.dart';
+import 'signal_component.dart';
 
 class OpticalDeckGeometry {
   const OpticalDeckGeometry(this.level, this.size, {this.fill = false});
@@ -29,7 +31,7 @@ class OpticalDeckGeometry {
     return fill ? scale : Size.square(scale.shortestSide);
   }
 
-  Size get tile => _scale * bayTileSize;
+  Size get tile => _scale * level.tileSize;
   double get glyphSize => (_scale.shortestSide * .34).clamp(7, 16);
   double get endpointSize => glyphSize * 2.8;
 
@@ -55,11 +57,31 @@ class OpticalDeckGeometry {
   /// Clear paper kept between the bay wall and anything drawn inside it.
   static const _wallGap = 9.0;
 
-  /// Receivers sit just inside the bay wall they are mounted on.
+  Offset source(OpticalSource source) => project(source.foot);
+
   Offset receiver(int index) {
     final sensor = level.receivers[index];
-    return project(sensor.position) -
-        _direction(sensor.incoming) * (endpointSize * .22 + _wallGap);
+    final floor = level.floor;
+    final point = sensor.position;
+    if (point.x > floor.left &&
+        point.x < floor.right &&
+        point.y > floor.top &&
+        point.y < floor.bottom) {
+      return project(point);
+    }
+    return project(point) -
+        heading(sensor.incoming) * (endpointSize * .22 + _wallGap);
+  }
+
+  Offset heading(BeamDirection direction) {
+    final scale = _scale;
+    final projected = Offset(
+      direction.x * scale.width,
+      -direction.y * scale.height,
+    );
+    return projected.distance == 0
+        ? _direction(direction)
+        : projected / projected.distance;
   }
 
   Rect get floorRect => Rect.fromPoints(
@@ -72,18 +94,17 @@ Offset _direction(BeamDirection direction) => Offset(direction.x, -direction.y);
 
 /// Drawing zones: lettered columns and numbered rows of whole tiles.
 int _zoneColumns(OpticalLevel level) =>
-    (level.floor.width / bayTileSize).round();
+    (level.floor.width / level.tileSize).round();
 int _zoneRows(OpticalLevel level) =>
-    (level.floor.height / bayTileSize + 1e-6).floor();
+    (level.floor.height / level.tileSize + 1e-6).floor();
 
 String opticalZone(OpticalLevel level, FloorPoint p) {
   final columns = _zoneColumns(level);
   final rows = _zoneRows(level);
-  final column = ((p.x - level.floor.left) / bayTileSize + 1e-6).floor().clamp(
-    0,
-    columns - 1,
-  );
-  final fromBottom = ((p.y - level.floor.top) / bayTileSize + 1e-6)
+  final column = ((p.x - level.floor.left) / level.tileSize + 1e-6)
+      .floor()
+      .clamp(0, columns - 1);
+  final fromBottom = ((p.y - level.floor.top) / level.tileSize + 1e-6)
       .floor()
       .clamp(0, rows - 1);
   return '${String.fromCharCode(65 + column)}${rows - fromBottom}';
@@ -91,10 +112,30 @@ String opticalZone(OpticalLevel level, FloorPoint p) {
 
 /// Parts are numbered laser first, then optics in layout order, then
 /// receivers, so the drawing's balloons match the parts list.
-const laserPartNumber = 1;
-int opticPartNumber(int layoutIndex) => layoutIndex + 2;
-int receiverPartNumber(int receiver, int opticCount) =>
-    opticCount + 2 + receiver;
+int opticPartNumber(OpticalLevel level, int index) =>
+    level.additionalSources.length + 2 + index;
+int receiverPartNumber(OpticalLevel level, int index) =>
+    opticPartNumber(level, level.initial.length) + index;
+int antennaPartNumber(OpticalLevel level, int index) =>
+    receiverPartNumber(level, level.receivers.length) + index;
+
+class OpticalAntennaSymbol extends StatelessWidget {
+  const OpticalAntennaSymbol({super.key, this.lit = false});
+
+  final bool lit;
+
+  @override
+  Widget build(BuildContext context) => SignalComponent(
+    device: const SignalDevice(
+      '',
+      '',
+      SignalDeviceKind.antenna,
+      SignalPoint(0, 0),
+      fixed: true,
+    ),
+    highlighted: lit,
+  );
+}
 
 class OpticalDeck extends StatelessWidget {
   const OpticalDeck({
@@ -121,7 +162,6 @@ class OpticalDeck extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final level = geometry.level;
-    final source = geometry.project(level.laserFoot);
     final look = SheetLook.of(context);
     final style = look.style;
     final symbols = look.symbols;
@@ -142,15 +182,18 @@ class OpticalDeck extends StatelessWidget {
             awardBounds: awardBounds,
           ),
         ),
-        _endpoint(
-          source,
-          level.direction,
-          Semantics(
-            label: 'Laser',
-            value: '100 u',
-            child: const OpticalPartSymbol.source(),
+        for (final source in level.sources)
+          _endpoint(
+            geometry.source(source),
+            source.direction,
+            Semantics(
+              label: level.additionalSources.isEmpty
+                  ? 'Laser'
+                  : 'Laser ${source.label}',
+              value: '100 u',
+              child: const OpticalPartSymbol.source(),
+            ),
           ),
-        ),
         for (var i = 0; i < level.receivers.length; i++)
           _endpoint(
             geometry.receiver(i),
@@ -164,7 +207,44 @@ class OpticalDeck extends StatelessWidget {
               ),
             ),
           ),
+        for (final original in layout)
+          if (original.converter case final converter?) ...[
+            _converter(original.id == held?.id ? held! : original, converter),
+          ],
+        for (final (index, antenna) in level.antennas.indexed)
+          _endpoint(
+            geometry.project(antenna.position),
+            BeamDirection.east,
+            Semantics(
+              label: '${antenna.label}, channel ${antenna.channel}',
+              value: '${lightUnits(trace.radioReadings[index].power)} u',
+              child: OpticalAntennaSymbol(
+                lit:
+                    trace.radioReadings[index].status ==
+                    RadioReception.accepted,
+              ),
+            ),
+          ),
       ],
+    );
+  }
+
+  Widget _converter(Optic optic, OpticalConverter converter) {
+    final lane = converter.lanes[optic.position]!;
+    return _endpoint(
+      geometry.project(optic.position),
+      BeamDirection.east,
+      Opacity(
+        opacity: optic.id == held?.id && !validDrop ? .5 : 1,
+        child: ConverterSymbol(
+          input: geometry.heading(lane.incoming),
+          output: geometry.heading(lane.outgoing),
+          movable: !optic.fixed,
+          transmitting:
+              trace.converterInputs[optic.id]?.status ==
+              ConverterReception.accepted,
+        ),
+      ),
     );
   }
 
@@ -175,13 +255,8 @@ class OpticalDeck extends StatelessWidget {
       top: point.dy - size / 2,
       width: size,
       height: size,
-      child: RotatedBox(
-        quarterTurns: switch (direction) {
-          BeamDirection.north => 3,
-          BeamDirection.east => 0,
-          BeamDirection.south => 1,
-          BeamDirection.west => 2,
-        },
+      child: Transform.rotate(
+        angle: geometry.heading(direction).direction,
         child: child,
       ),
     );
@@ -244,7 +319,7 @@ class _OpticalDrawing extends CustomPainter {
   bool _crowded(Offset p, List<Offset> reserved, double room) =>
       _wallClearance(p) < room ||
       (!awardBounds.isEmpty && awardBounds.inflate(room).contains(p)) ||
-      level.blocks.any(
+      level.lightObstacles.any(
         (block) => _blockBounds(block).inflate(room).contains(p),
       ) ||
       reserved.any((other) => (other - p).distance < room * 1.6) ||
@@ -265,17 +340,21 @@ class _OpticalDrawing extends CustomPainter {
     _paintBlocks(canvas);
     if (level == reflectionLesson && !opened) _paintReceiverDatum(canvas);
     _paintBeams(canvas);
+    _paintRadio(canvas);
     for (final optic in layout) {
-      if (optic.id != held?.id) _paintOptic(canvas, optic);
+      if (optic.id != held?.id && optic.converter == null) {
+        _paintOptic(canvas, optic);
+      }
     }
-    if (held case final optic?) {
+    if (held case final optic? when optic.converter == null) {
       _paintOptic(canvas, optic, opacity: validDrop ? 1 : .5);
     }
     // Annotation points that later notes and balloons keep clear of.
     final reserved = [
       for (final optic in _placed) geometry.project(optic.position),
-      geometry.project(level.laserFoot),
+      for (final source in level.sources) geometry.source(source),
       for (var i = 0; i < level.receivers.length; i++) geometry.receiver(i),
+      for (final antenna in level.antennas) geometry.project(antenna.position),
     ];
     final mirrorLeaders = _paintCallouts(canvas, reserved);
     if (!opened) _paintClearances(canvas, reserved);
@@ -351,6 +430,15 @@ class _OpticalDrawing extends CustomPainter {
     for (final block in level.blocks) {
       paintHatchedBarrier(canvas, _blockBounds(block), style);
     }
+    for (final barrier in level.barriers) {
+      final bounds = _blockBounds(barrier.bounds);
+      switch (barrier.material) {
+        case BarrierMaterial.concrete:
+          paintHatchedBarrier(canvas, bounds, style);
+        case BarrierMaterial.mesh:
+          paintMeshBarrier(canvas, bounds, style);
+      }
+    }
   }
 
   Rect _blockBounds(math.Rectangle<double> block) => Rect.fromPoints(
@@ -359,10 +447,11 @@ class _OpticalDrawing extends CustomPainter {
   );
 
   void _paintBeams(Canvas canvas) {
+    final sources = level.sources.toList(growable: false);
     for (final beam in trace.segments) {
-      final from = geometry.project(
-        beam.fromOptic == null ? level.laserFoot : beam.from,
-      );
+      final from = beam.fromOptic == null
+          ? geometry.source(sources[beam.source])
+          : geometry.project(beam.from);
       final to = switch (beam.receiver) {
         final receiver? => geometry.receiver(receiver),
         null => _beamEnd(beam),
@@ -403,6 +492,32 @@ class _OpticalDrawing extends CustomPainter {
         _arrowhead(canvas, _beamEnd(beam), heading, _beamColor(beam));
       } else if (beam.strength >= .99 && length >= geometry.glyphSize * 4) {
         _arrowhead(canvas, from + (to - from) * .5, heading, _beamColor(beam));
+      }
+    }
+  }
+
+  void _paintRadio(Canvas canvas) {
+    for (final hop in trace.radioHops) {
+      final start = geometry.project(hop.from);
+      final end = geometry.project(hop.to);
+      final length = (end - start).distance;
+      if (length <= 1) continue;
+      final direction = (end - start) / length;
+      final ink = _ink(1.3, color: style.beam);
+      for (var step = geometry.glyphSize * 1.3; step < length; step += 9) {
+        canvas.drawLine(
+          start + direction * step,
+          start + direction * math.min(step + 5, length),
+          ink,
+        );
+      }
+      if ((hop.blockedDistance ?? double.infinity) <= hop.reach) {
+        final across = Offset(-direction.dy, direction.dx);
+        canvas.drawLine(
+          end - across * 4,
+          end + across * 4,
+          _ink(1.6, color: style.stamp),
+        );
       }
     }
   }
@@ -475,13 +590,18 @@ class _OpticalDrawing extends CustomPainter {
     final radius = geometry.glyphSize * 1.75;
     final lettering = (geometry.glyphSize * .75).clamp(8.0, 11.0);
     for (final optic in _placed) {
+      if (optic.converter != null) continue;
       final center = geometry.project(optic.position);
       final mirror = _diagonal(optic, 1).direction;
       for (final incoming in trace.segments) {
         if (incoming.toOptic != optic.id) continue;
         final inHeading = _heading(incoming);
         for (final out in trace.segments) {
-          if (out.fromOptic != optic.id) continue;
+          if (out.fromOptic != optic.id ||
+              out.source != incoming.source ||
+              out.from != incoming.to) {
+            continue;
+          }
           final turn = _wrap(_heading(out) - inHeading).abs();
           if ((turn - math.pi / 2).abs() > .1) continue;
           ({double start, double sweep, Offset label})? choice;
@@ -565,7 +685,7 @@ class _OpticalDrawing extends CustomPainter {
   /// the closest beam it could intercept. It follows a part while dragged.
   void _paintClearances(Canvas canvas, List<Offset> reserved) {
     for (final optic in _placed) {
-      if (optic.fixed) continue;
+      if (optic.fixed || optic.converter != null) continue;
       final touched = trace.segments.any(
         (beam) => beam.fromOptic == optic.id || beam.toOptic == optic.id,
       );
@@ -639,7 +759,7 @@ class _OpticalDrawing extends CustomPainter {
     reserved.add(label);
     paintLettering(
       canvas,
-      _tiles(gap.abs() / bayTileSize),
+      _tiles(gap.abs() / level.tileSize),
       label,
       size: (r * .8).clamp(8.0, 11.0),
       color: style.ink,
@@ -660,51 +780,63 @@ class _OpticalDrawing extends CustomPainter {
     Map<String, double> mirrorLeaders,
   ) {
     final r = (geometry.glyphSize * .72).clamp(7.0, 10.0);
-    final forward = _direction(level.direction);
-    final sourceLeader =
-        (Offset(-forward.dy, forward.dx) - forward * .45).direction;
-    final parts = <(int, Offset, double, double?)>[
-      (
-        laserPartNumber,
-        geometry.project(level.laserFoot),
-        geometry.endpointSize * .3,
-        sourceLeader,
-      ),
+    final sources = level.sources.toList(growable: false);
+    final parts = <(String, Offset, double, double?, Offset?)>[
+      for (final (index, source) in sources.indexed)
+        (
+          sources.length == 1 ? '${index + 1}' : source.label,
+          geometry.source(source),
+          geometry.endpointSize * .3,
+          _sourceLeader(source.direction),
+          geometry.heading(source.direction),
+        ),
       for (final (index, optic) in layout.indexed)
         (
-          opticPartNumber(index),
+          optic.converter?.requiredSource ?? '${opticPartNumber(level, index)}',
           geometry.project(
             optic.id == held?.id ? held!.position : optic.position,
           ),
           geometry.glyphSize +
               (!optic.fixed && symbols == PartSymbols.drafting ? 3 : 0),
           mirrorLeaders[optic.id],
+          null,
         ),
       for (var i = 0; i < level.receivers.length; i++)
         (
-          receiverPartNumber(i, layout.length),
+          '${receiverPartNumber(level, i)}',
           geometry.receiver(i),
           geometry.endpointSize * .26,
+          null,
+          null,
+        ),
+      for (final (i, antenna) in level.antennas.indexed)
+        (
+          '${antennaPartNumber(level, i)}',
+          geometry.project(antenna.position),
+          geometry.endpointSize * .36,
+          null,
           null,
         ),
     ];
     final annotations = DraftingAnnotations(
       bounds: geometry.floorRect,
       obstacles: [
-        for (final (_, p, reach, _) in parts)
+        for (final (_, p, reach, _, _) in parts)
           Rect.fromCircle(center: p, radius: reach),
         for (final point in reserved)
           Rect.fromCircle(center: point, radius: r * .9),
-        ...level.blocks.map(_blockBounds),
+        ...level.lightObstacles.map(_blockBounds),
         if (!awardBounds.isEmpty) awardBounds,
       ],
       traces: [
         for (final beam in trace.segments)
           (geometry.project(beam.from), geometry.project(beam.to)),
+        for (final hop in trace.radioHops)
+          (geometry.project(hop.from), geometry.project(hop.to)),
       ],
     );
     final gaps = [r * 1.4, r * 2.2, r * 3.2, r * 4.3];
-    for (final (number, anchor, reach, preferred) in parts) {
+    for (final (label, anchor, reach, preferred, forward) in parts) {
       final balloon = annotations.placeBalloon(
         anchor: anchor,
         radius: r,
@@ -714,16 +846,16 @@ class _OpticalDrawing extends CustomPainter {
             ? null
             : Offset.fromDirection(
                 preferred,
-                reach + r * (number == laserPartNumber ? 2.4 : 4.4),
+                reach + r * (forward != null ? 2.4 : 4.4),
               ),
-        reachAt: number == laserPartNumber && symbols == PartSymbols.drafting
+        reachAt: forward != null && symbols == PartSymbols.drafting
             ? (direction) => _sourceCasingRadius(direction, forward)
             : null,
       );
       if (balloon == null) continue;
       paintPartBalloon(
         canvas,
-        number: number,
+        number: label,
         anchor: anchor,
         center: balloon.center,
         reach: balloon.reach,
@@ -731,6 +863,11 @@ class _OpticalDrawing extends CustomPainter {
         sheet: style,
       );
     }
+  }
+
+  double _sourceLeader(BeamDirection direction) {
+    final forward = _direction(direction);
+    return (Offset(-forward.dy, forward.dx) - forward * .45).direction;
   }
 
   double _sourceCasingRadius(Offset direction, Offset forward) {

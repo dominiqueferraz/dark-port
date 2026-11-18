@@ -136,7 +136,7 @@ double distanceToDraftingSegment(Offset point, Offset from, Offset to) {
 
 void paintPartBalloon(
   Canvas canvas, {
-  required int number,
+  required String number,
   required Offset anchor,
   required Offset center,
   required double reach,
@@ -157,13 +157,7 @@ void paintPartBalloon(
       ..color = sheet.ink
       ..strokeWidth = .9,
   );
-  paintLettering(
-    canvas,
-    '$number',
-    center,
-    size: radius * 1.3,
-    color: sheet.ink,
-  );
+  paintLettering(canvas, number, center, size: radius * 1.3, color: sheet.ink);
 }
 
 void paintDimensionLine(

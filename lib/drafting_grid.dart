@@ -65,6 +65,30 @@ void paintHatchedBarrier(Canvas canvas, Rect rect, SheetStyle sheet) {
   );
 }
 
+void paintMeshBarrier(Canvas canvas, Rect rect, SheetStyle sheet) {
+  canvas.drawRect(rect, Paint()..color = sheet.paper);
+  final ink = Paint()
+    ..color = sheet.ink
+    ..strokeWidth = .75
+    ..style = PaintingStyle.stroke;
+  canvas.save();
+  canvas.clipRect(rect);
+  for (var x = rect.left - rect.height; x <= rect.right; x += 4) {
+    canvas.drawLine(
+      Offset(x, rect.top),
+      Offset(x + rect.height, rect.bottom),
+      ink,
+    );
+    canvas.drawLine(
+      Offset(x, rect.bottom),
+      Offset(x + rect.height, rect.top),
+      ink,
+    );
+  }
+  canvas.restore();
+  canvas.drawRect(rect, ink);
+}
+
 void paintDraftingGrid(
   Canvas canvas, {
   required Rect grid,

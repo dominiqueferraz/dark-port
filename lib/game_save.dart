@@ -16,25 +16,30 @@ class GameSave {
     Map<String, int> losses = const {},
     Map<SignalLink, LeadType> leadTypes = const {},
   }) {
-    if (lesson is WiredLesson) {
+    final wired = switch (lesson) {
+      WiredLesson(:final board) => board,
+      OpticalLesson(:final wiredBoard) => wiredBoard,
+    };
+    final optics = List<Optic>.unmodifiable(
+      layout ?? (lesson is OpticalLesson ? lesson.board.initial : const []),
+    );
+    if (wired != null) {
       return GameSave._wired(
         lesson,
         SignalBoardState(
-          lesson.board,
+          wired,
           links: links,
           positions: positions,
           flipped: flipped,
           losses: losses,
           leadTypes: leadTypes,
         ),
-        List.unmodifiable(layout ?? const []),
+        optics,
       );
     }
     return GameSave._(
       lesson,
-      layout: List.unmodifiable(
-        layout ?? (lesson as OpticalLesson).board.initial,
-      ),
+      layout: optics,
       links: List.unmodifiable(links ?? const []),
       positions: Map.unmodifiable(positions ?? const {}),
       flipped: Set.unmodifiable(flipped ?? const {}),
@@ -42,13 +47,28 @@ class GameSave {
     );
   }
 
-  factory GameSave.fromSignal(WiredLesson lesson, SignalBoardState state) {
-    assert(identical(lesson.board, state.board));
-    return GameSave._wired(lesson, state, const []);
+  factory GameSave.fromSignal(
+    TutorialLesson lesson,
+    SignalBoardState state, {
+    List<Optic>? layout,
+  }) {
+    assert(
+      identical(switch (lesson) {
+        WiredLesson(:final board) => board,
+        OpticalLesson(:final wiredBoard) => wiredBoard,
+      }, state.board),
+    );
+    return GameSave._wired(
+      lesson,
+      state,
+      List.unmodifiable(
+        layout ?? (lesson is OpticalLesson ? lesson.board.initial : const []),
+      ),
+    );
   }
 
   GameSave._wired(
-    WiredLesson lesson,
+    TutorialLesson lesson,
     SignalBoardState state,
     List<Optic> layout,
   ) : this._(
@@ -87,48 +107,54 @@ class GameSave {
   Map<SignalLink, SignalDelivery> get deliveries =>
       signal?.deliveries ?? const {};
   bool get alarmFailed => signal?.alarmFailed ?? false;
-  late final bool solved = switch (opticalBoard) {
+  late final bool opticsSolved = switch (opticalBoard) {
     final level? => traceOptics(level, layout).solves(level),
-    null => signal?.solved ?? false,
+    null => true,
   };
+  bool get solved => opticsSolved && (signal?.solved ?? true);
 
-  Map<String, Object> toJson() => wiredBoard != null
-      ? {
-          'board': lesson.id,
-          'flipped': flipped.toList(),
-          'losses': losses,
-          'positions': {
-            for (final entry in positions.entries)
-              entry.key: {'x': entry.value.x, 'y': entry.value.y},
+  Map<String, Object> toJson() => {
+    'board': lesson.id,
+    if (wiredBoard != null) ...{
+      'flipped': flipped.toList(),
+      'losses': losses,
+      'positions': {
+        for (final entry in positions.entries)
+          entry.key: {'x': entry.value.x, 'y': entry.value.y},
+      },
+      'links': [
+        for (final link in links)
+          {
+            'from': link.from,
+            'to': link.to,
+            'input': link.input,
+            'output': link.output,
+            if (signal!.leadTypes[link] case final type?) 'lead': type.name,
           },
-          'links': [
-            for (final link in links)
-              {
-                'from': link.from,
-                'to': link.to,
-                'input': link.input,
-                'output': link.output,
-                if (signal!.leadTypes[link] case final type?) 'lead': type.name,
-              },
-          ],
-        }
-      : {
-          'board': lesson.id,
-          'layout': [
-            for (final optic in layout)
-              {
-                'id': optic.id,
-                'x': optic.position.x,
-                'y': optic.position.y,
-                'turned': optic.turned,
-              },
-          ],
-        };
+      ],
+    },
+    if (opticalBoard != null)
+      'layout': [
+        for (final optic in layout)
+          {
+            'id': optic.id,
+            'x': optic.position.x,
+            'y': optic.position.y,
+            'turned': optic.turned,
+          },
+      ],
+  };
 
   factory GameSave.fromJson(Map<String, dynamic> json) {
     if (json['board'] case final String id) {
       return switch (lessonsById[id] ?? endlessLevelsByLessonId[id]?.lesson) {
-        final OpticalLesson lesson => _readOpticalSave(lesson, json['layout']),
+        final OpticalLesson lesson => _readOpticalSave(
+          lesson,
+          json['layout'],
+          signal: lesson.wiredBoard == null
+              ? null
+              : _readSignalState(lesson.wiredBoard!, json),
+        ),
         final WiredLesson lesson => _readWiredSave(lesson, json),
         null => throw const FormatException('Unknown lesson.'),
       };
@@ -152,6 +178,7 @@ class GameSave {
     OpticalLesson lesson,
     Object? rows, {
     bool? verified,
+    SignalBoardState? signal,
   }) {
     final level = lesson.board;
     if (rows is! List) throw const FormatException('Missing board.');
@@ -189,6 +216,7 @@ class GameSave {
         p,
         turned: entry['turned'] as bool,
         fixed: template.fixed,
+        converter: template.converter,
       );
     }
     final layout = [for (final template in level.initial) byId[template.id]!];
@@ -197,10 +225,13 @@ class GameSave {
       final valid = optic.fixed
           ? optic.position == template.position &&
                 optic.turned == template.turned
-          : level.canPlace(optic, layout);
+          : level.canPlace(optic, layout) &&
+                (optic.converter == null || optic.turned == template.turned);
       if (!valid) throw const FormatException('Invalid placement.');
     }
-    final save = GameSave(lesson, layout: layout);
+    final save = signal == null
+        ? GameSave(lesson, layout: layout)
+        : GameSave.fromSignal(lesson, signal, layout: layout);
     if (verified == true && !save.solved && !legacyInterlock) {
       throw const FormatException('Invalid completed route.');
     }
@@ -211,12 +242,22 @@ class GameSave {
     WiredLesson lesson,
     Map<String, dynamic> json,
   ) {
-    final board = lesson.board;
     final retired = switch (lesson) {
       _ when lesson == splitRatings => const {'fourWay', 'monitor'},
       _ when lesson == testLine => _retiredTestLineParts,
       _ => const <String>{},
     };
+    return GameSave.fromSignal(
+      lesson,
+      _readSignalState(lesson.board, json, retired: retired),
+    );
+  }
+
+  static SignalBoardState _readSignalState(
+    SignalBoard board,
+    Map<String, dynamic> json, {
+    Set<String> retired = const {},
+  }) {
     final positions = _readPositions(
       board,
       board.devices,
@@ -256,8 +297,8 @@ class GameSave {
         throw const FormatException('Invalid cable.');
       }
     }
-    return GameSave(
-      lesson,
+    return SignalBoardState(
+      board,
       links: links,
       positions: positions,
       flipped: flipped,

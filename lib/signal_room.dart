@@ -60,6 +60,8 @@ class SignalRoom extends StatefulWidget {
     required this.navigation,
     required this.onChange,
     this.revealedParts = const {},
+    this.otherSectionSolved = true,
+    this.otherSectionParts = const {},
   });
 
   final SignalBoardState boardState;
@@ -67,6 +69,8 @@ class SignalRoom extends StatefulWidget {
   final PuzzleNavigation navigation;
   final ValueChanged<SignalBoardState> onChange;
   final Set<GuidePart> revealedParts;
+  final bool otherSectionSolved;
+  final Set<GuidePart> otherSectionParts;
 
   @override
   State<SignalRoom> createState() => _SignalRoomState();
@@ -272,7 +276,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     GameAudio.play(context, cue);
     if (next.alarmFailed && !_state.alarmFailed) {
       GameAudio.play(context, BoardCue.alarm);
-    } else if (next.solved && !_state.solved) {
+    } else if (widget.otherSectionSolved && next.solved && !_state.solved) {
       GameAudio.play(context, BoardCue.solved);
     }
     widget.onChange(next);
@@ -419,8 +423,8 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     final matching = incoming.where(
       (delivery) => delivery.channel == device.channel,
     );
-    if (device.mustBeQuiet) {
-      return matching.where((delivery) => delivery.strength > 0).firstOrNull;
+    if (device.protected) {
+      return matching.where(device.trips).firstOrNull ?? matching.firstOrNull;
     }
     return matching
             .where(
@@ -436,6 +440,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
 
   String _band(SignalDevice device) {
     if (device.mustBeQuiet) return '0';
+    if (device.tripStrength case final trip?) return '<${_value(trip)}';
     final minimum = _value(device.minimumStrength!);
     if (device.maximumStrength == null) return '≥$minimum';
     final maximum = _value(device.maximumStrength!);
@@ -482,14 +487,16 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     final isBlocker = goal == _board.alarm?.blocker;
     final alarm = isBlocker ? _board.alarmPower(deliveries) : null;
     final reading = alarm?.reading ?? goal.read(delivery);
-    final onTarget = goal.mustBeQuiet
-        ? delivery == null
+    final onTarget = goal.protected
+        ? delivery == null || !goal.trips(delivery)
         : reading == SignalReading.accepted &&
               (!isBlocker ||
                   alarm!.sources.length == 1 &&
                       alarm.sources.contains(_board.alarm?.source));
     final status = goal.mustBeQuiet
         ? (onTarget ? 'Quiet' : 'Signal detected')
+        : goal.tripStrength != null
+        ? (onTarget ? 'Below trip threshold' : 'Guard tripped')
         : switch (reading) {
             SignalReading.quiet =>
               _radioFailure(goal, deliveries, positions)?.status ?? 'No signal',
@@ -503,7 +510,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
                   ? 'Online'
                   : 'Holding on ${alarm.sources.map((id) => _device(id).name).join(' and ')}',
           };
-    final invalidSignal = goal.mustBeQuiet
+    final invalidSignal = goal.protected
         ? !onTarget
         : reading != SignalReading.quiet && reading != SignalReading.accepted;
     final tone = onTarget
@@ -606,9 +613,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
         ? null
         : _inspector(_device(_inspected!));
     final radioWarning = _board.goals
-        .where(
-          (goal) => !goal.mustBeQuiet && _incoming(goal, deliveries) == null,
-        )
+        .where((goal) => !goal.protected && _incoming(goal, deliveries) == null)
         .map((goal) => _radioFailure(goal, deliveries, positions))
         .nonNulls
         .firstOrNull;
@@ -651,10 +656,10 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
       canLeave: drag == null,
       onHelp: () => showPartGuide(
         context,
-        puzzleParts: signalGuideParts(_board),
+        puzzleParts: {...signalGuideParts(_board), ...widget.otherSectionParts},
         revealedParts: widget.revealedParts,
       ),
-      solved: drag == null && _state.solved,
+      solved: drag == null && _state.solved && widget.otherSectionSolved,
       failureMessage: _state.alarmFailed
           ? 'Alarm tripped. Undo or reset the room.'
           : null,
@@ -1123,7 +1128,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
 
   String _inspectAntenna(SignalDevice antenna) {
     final details = [
-      'Channel ${antenna.channel}${antenna.mustBeQuiet ? ' · Target 0 u' : ''}',
+      'Channel ${antenna.channel}${antenna.protected ? ' · Target ${_band(antenna)} u' : ''}',
     ];
     final deliveries = _state.deliveries;
     final delivery = _incoming(antenna);
@@ -1149,7 +1154,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
           details.add('${_value(delivery.strength)} u · Too weak');
         default:
           details.add(
-            '${_value(delivery.strength)} u${antenna.mustBeQuiet ? ' · Signal detected' : ''}',
+            '${_value(delivery.strength)} u${antenna.trips(delivery) ? ' · ${antenna.mustBeQuiet ? 'Signal detected' : 'Guard tripped'}' : ''}',
           );
       }
     } else if (_radioFailure(antenna, deliveries, _state.positions)

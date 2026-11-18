@@ -1,4 +1,5 @@
 import 'endless_boards.dart';
+import 'handoff_boards.dart';
 import 'signal_board_state.dart';
 import 'tutorial.dart';
 
@@ -164,7 +165,16 @@ enum EndlessLevel {
     quietSector => quietSectorLesson,
     cornerMirror => cornerMirrorLesson,
     splitAroundTheBaffle => splitAroundBaffleLesson,
-    _ => null,
+    bothFaces => bothFacesLesson,
+    twoBranchesTwoBends => twoBranchesTwoBendsLesson,
+    firstConversion => firstConversionLesson,
+    meshWindow => meshWindowLesson,
+    aroundTheShield => aroundTheShieldLesson,
+    splitTwice => splitTwiceLesson,
+    crossedChannels => crossedChannelsLesson,
+    serviceAndInspection => serviceAndInspectionLesson,
+    oneMirrorTwoWindows => oneMirrorTwoWindowsLesson,
+    dualHandoff => dualHandoffLesson,
   };
 
   int get fixtureRevision => 1;
@@ -204,7 +214,44 @@ enum EndlessLevel {
     splitAroundTheBaffle => const {
       'two-halves': 'Deliver 50 u to each sensor, with one branch routed around the baffle.',
     },
-    _ => const {},
+    bothFaces => const {
+      'shared-diagonal': 'Deliver 100 u to each sensor using the same mirror.',
+    },
+    twoBranchesTwoBends => const {
+      'opposite-ends':
+          'Take both 50 u branches around opposite ends of the baffle.',
+    },
+    firstConversion => const {
+      'first-radio-hop': 'Deliver 50 u to Inspection and 30 u to Remote.',
+    },
+    meshWindow => const {
+      'mesh-hop': 'Deliver 30 u to Remote through a mesh wall.',
+    },
+    aroundTheShield => const {
+      'four-step-lane': 'Deliver 30 u to Remote without hitting concrete.',
+    },
+    splitTwice => const {
+      'quarter-quarter-half':
+          'Deliver 25 u to each local sensor and reserve 50 u for conversion.',
+    },
+    crossedChannels => const {
+      'matched-channels': 'Deliver 30 u to each antenna on its own channel.',
+    },
+    serviceAndInspection => const {
+      'shielded-service':
+          'Complete both circuits with the four-unit shielded mast lead.',
+      'trunk-service':
+          'Complete both circuits with the six-unit trunk mast lead.',
+      'ordinary-service':
+          'Complete both circuits with the three-unit ordinary mast lead.',
+    },
+    oneMirrorTwoWindows => const {
+      'paired-windows': 'Match both lasers to their converters and deliver 80 u to each remote.',
+    },
+    dualHandoff => const {
+      'paired-halves':
+          'Deliver 50 u to each local sensor and 30 u to each paired remote.',
+    },
   };
 
   Iterable<String> get solutionIds => solutionConditions.keys;
@@ -216,6 +263,12 @@ enum EndlessLevel {
 
   String? solutionFor(SignalBoardState state) {
     final fixture = lesson;
+    if (this == serviceAndInspection) {
+      if (state.board != serviceAndInspectionBoard || !state.solved) {
+        return null;
+      }
+      return serviceSolutionAt(state.positions['splitter']!);
+    }
     if (fixture is! WiredLesson ||
         fixture.board != state.board ||
         !state.solved) {

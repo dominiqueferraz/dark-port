@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'placement_nodes.dart';
+import 'radio_propagation.dart';
 
 enum SignalDeviceKind {
   transmitter,
@@ -54,6 +55,7 @@ class SignalDevice {
     this.alternateTint = false,
     this.mounts,
     this.mustBeQuiet = false,
+    this.tripStrength,
   });
 
   final String id;
@@ -74,7 +76,16 @@ class SignalDevice {
   final bool alternateTint;
   final List<PlacementNode>? mounts;
   final bool mustBeQuiet;
+  final double? tripStrength;
   int get range => cableRange ?? splitter?.range ?? 3;
+
+  bool get protected => mustBeQuiet || tripStrength != null;
+
+  bool trips(SignalDelivery delivery) =>
+      delivery.channel == channel &&
+      delivery.strength > 0 &&
+      (mustBeQuiet ||
+          (tripStrength != null && delivery.strength >= tripStrength!));
 
   bool get canFlip =>
       !fixed && mounts == null && kind != SignalDeviceKind.broadcaster;
@@ -558,7 +569,7 @@ class SignalBoard {
         (device) => device.kind == SignalDeviceKind.antenna,
       )) {
         final path = radioPath(broadcaster, antenna, positions);
-        final strength = feed.strength - 5 * path.distance;
+        final strength = radioStrength(feed.strength, path.distance);
         if (path.inRange && path.blockedAt == null && strength > 0) {
           deliveries[(
             from: broadcaster.id,
@@ -653,12 +664,8 @@ class SignalBoard {
           final incoming = deliveries.entries.where(
             (entry) => entry.key.to == goal.id,
           );
-          return goal.mustBeQuiet
-              ? !incoming.any(
-                  (entry) =>
-                      entry.value.channel == goal.channel &&
-                      entry.value.strength > 0,
-                )
+          return goal.protected
+              ? !incoming.any((entry) => goal.trips(entry.value))
               : incoming.any(
                   (entry) => goal.read(entry.value) == SignalReading.accepted,
                 );

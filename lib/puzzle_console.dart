@@ -50,6 +50,7 @@ class PuzzleNavigation {
     this.backIcon = Icons.arrow_back,
     this.onStartLesson,
     this.advance,
+    this.circuits,
   });
 
   final String backLabel;
@@ -57,6 +58,13 @@ class PuzzleNavigation {
   final IconData backIcon;
   final VoidCallback? onStartLesson;
   final ({String label, IconData icon, VoidCallback onPressed})? advance;
+  final ({
+    bool opticalSelected,
+    bool wiredSolved,
+    bool opticalSolved,
+    ValueChanged<bool> selectOptical,
+  })?
+  circuits;
 }
 
 /// Shared layout for a playable board and its readings, controls and status.
@@ -137,6 +145,7 @@ class PuzzleConsole extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             _toolbar(context),
+            ?_circuitSelector(context),
             ?inventory,
             const SizedBox(height: 6),
             CustomPaint(
@@ -261,6 +270,7 @@ class PuzzleConsole extends StatelessWidget {
     child: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        ?_circuitSelector(context),
         Flexible(
           flex: 5,
           child: _PanelScroll(
@@ -298,6 +308,41 @@ class PuzzleConsole extends StatelessWidget {
       ],
     ),
   );
+
+  Widget? _circuitSelector(BuildContext context) {
+    final circuits = navigation.circuits;
+    if (circuits == null) return null;
+    ButtonSegment<bool> circuit(bool optical, String label, bool complete) =>
+        ButtonSegment(
+          value: optical,
+          label: Semantics(
+            label: complete ? '$label complete' : label,
+            child: Text(label, style: draftingLettering(12)),
+          ),
+          icon: complete ? const Icon(Icons.check, size: 12) : null,
+        );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: SegmentedButton<bool>(
+        segments: [
+          circuit(false, 'Wired', circuits.wiredSolved),
+          circuit(true, 'Optical', circuits.opticalSolved),
+        ],
+        selected: {circuits.opticalSelected},
+        onSelectionChanged: canLeave
+            ? (selected) => circuits.selectOptical(selected.single)
+            : null,
+        showSelectedIcon: false,
+        style: SegmentedButton.styleFrom(
+          foregroundColor: context.sheet.ink,
+          selectedBackgroundColor: context.sheet.ink,
+          selectedForegroundColor: context.sheet.paper,
+          visualDensity: VisualDensity.compact,
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+        ),
+      ),
+    );
+  }
 
   Widget? _objective() {
     final objective = brief.objective ?? brief.goal;

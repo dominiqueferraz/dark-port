@@ -24,6 +24,8 @@ class OpticalRoom extends StatefulWidget {
     required this.navigation,
     required this.onChange,
     this.revealedParts = const {},
+    this.otherSectionSolved = true,
+    this.otherSectionParts = const {},
   });
 
   final OpticalLevel level;
@@ -32,6 +34,8 @@ class OpticalRoom extends StatefulWidget {
   final PuzzleNavigation navigation;
   final ValueChanged<List<Optic>> onChange;
   final Set<GuidePart> revealedParts;
+  final bool otherSectionSolved;
+  final Set<GuidePart> otherSectionParts;
 
   @override
   State<OpticalRoom> createState() => _OpticalRoomState();
@@ -102,7 +106,7 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
     GameAudio.play(context, cue);
     if (_trace.interruptsAlarm(_level)) {
       GameAudio.play(context, BoardCue.alarm);
-    } else if (_trace.solves(_level)) {
+    } else if (widget.otherSectionSolved && _trace.solves(_level)) {
       GameAudio.play(context, BoardCue.solved);
     }
   }
@@ -130,7 +134,7 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
   }
 
   void _rotate(Optic optic) {
-    if (!_canEdit || optic.fixed) return;
+    if (!_canEdit || optic.fixed || optic.converter != null) return;
     setState(() => _commit(optic.rotate(), BoardCue.turn));
   }
 
@@ -216,10 +220,13 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
       canLeave: idle,
       onHelp: () => showPartGuide(
         context,
-        puzzleParts: opticalGuideParts(_level),
+        puzzleParts: {
+          ...opticalGuideParts(_level),
+          ...widget.otherSectionParts,
+        },
         revealedParts: widget.revealedParts,
       ),
-      solved: _opened,
+      solved: _opened && widget.otherSectionSolved,
       failureMessage: !_alarmFailed
           ? null
           : _history.canUndo
@@ -279,13 +286,21 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
     return DraftingPartsList(
       rows: [
         if (showTargetsFirst) ...receivers,
-        const DraftingPartRow(
-          number: '$laserPartNumber',
-          name: 'LASER SOURCE',
-          state: '100 U',
-          symbol: OpticalPartSymbol.source(),
-        ),
-        for (final (index, optic) in _layout.indexed) _opticRow(index, optic),
+        for (final (index, antenna) in _level.antennas.indexed)
+          _antennaReading(index, antenna),
+        for (final (index, optic) in _layout.indexed)
+          if (optic.converter != null) _opticRow(index, optic),
+        for (final (index, source) in _level.sources.indexed)
+          DraftingPartRow(
+            number: _level.additionalSources.isEmpty
+                ? '${index + 1}'
+                : source.label,
+            name: 'LASER SOURCE',
+            state: '100 U',
+            symbol: const OpticalPartSymbol.source(),
+          ),
+        for (final (index, optic) in _layout.indexed)
+          if (optic.converter == null) _opticRow(index, optic),
         if (!showTargetsFirst) ...receivers,
       ],
     );
@@ -293,9 +308,12 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
 
   Widget _opticRow(int index, Optic optic) {
     final shown = optic.id == _held?.id ? _held! : optic;
-    final kind = optic.kind.label.toUpperCase();
+    if (shown.converter case final converter?) {
+      return _converterReading(index, shown, converter);
+    }
+    final kind = shown.kind.label.toUpperCase();
     return DraftingPartRow(
-      number: '${opticPartNumber(index)}',
+      number: '${opticPartNumber(_level, index)}',
       name: kind,
       state: optic.fixed
           ? 'FIXED'
@@ -304,6 +322,72 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
         shown.kind,
         turned: shown.turned,
         fixed: shown.fixed,
+      ),
+    );
+  }
+
+  Widget _converterReading(int index, Optic optic, OpticalConverter converter) {
+    final reading = _trace.converterInputs[optic.id];
+    final status = reading?.status ?? ConverterReception.quiet;
+    final input = reading?.power ?? 0;
+    final received = reading?.source;
+    final expected = converter.requiredSource;
+    final details = [
+      status.label,
+      'Channel ${converter.channel}',
+      if (expected != null) 'Requires laser $expected',
+      if (received != null && _level.additionalSources.isNotEmpty)
+        'Received laser $received',
+      if (converter.power case final required?)
+        'Input target ${lightUnits(required)} u',
+    ].join(' · ');
+    return DraftingPartRow(
+      key: ValueKey('converter-reading-${optic.id}'),
+      number: expected ?? '${opticPartNumber(_level, index)}',
+      name: 'CONVERTER · CH ${converter.channel}',
+      state: '${lightUnits(input)} U IN',
+      status: details,
+      tone: switch (status) {
+        ConverterReception.accepted => PartTone.lit,
+        ConverterReception.quiet => PartTone.plain,
+        _ => PartTone.warning,
+      },
+      symbol: ConverterSymbol(
+        transmitting: status == ConverterReception.accepted,
+      ),
+    );
+  }
+
+  Widget _antennaReading(int index, OpticalAntenna antenna) {
+    final reading = _trace.radioReadings[index];
+    final accepted = reading.status == RadioReception.accepted;
+    final diagnostic = [
+      reading.status.label,
+      if (reading.hop case final hop?) ...[
+        '${lightUnits(reading.distance!)} of ${lightUnits(hop.reach)} grid steps',
+        if (hop.channel != antenna.channel) 'Received channel ${hop.channel}',
+      ],
+    ].join(' · ');
+    final power = lightUnits(reading.power);
+    final target = lightUnits(antenna.minimum);
+    return Semantics(
+      key: ValueKey('optical-antenna-$index'),
+      container: true,
+      label:
+          '${antenna.label}. Channel ${antenna.channel}. Target at least $target units.',
+      value: '$power units. $diagnostic.',
+      excludeSemantics: true,
+      child: DraftingPartRow(
+        number: '${antennaPartNumber(_level, index)}',
+        name: '${antenna.label.toUpperCase()} · CH ${antenna.channel}',
+        state: '$power / ≥$target U',
+        status: diagnostic,
+        tone: accepted
+            ? PartTone.lit
+            : reading.status == RadioReception.quiet
+            ? PartTone.plain
+            : PartTone.warning,
+        symbol: OpticalAntennaSymbol(lit: accepted),
       ),
     );
   }
@@ -333,7 +417,7 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
       value: '$current light units, ${lit ? 'lit' : 'dark'}',
       excludeSemantics: true,
       child: DraftingPartRow(
-        number: '${receiverPartNumber(index, _layout.length)}',
+        number: '${receiverPartNumber(_level, index)}',
         name: [
           receiver.label.toUpperCase(),
           if (alarm && !receiver.label.toLowerCase().contains('alarm'))
@@ -355,6 +439,20 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
     final sheet = context.sheet;
     final held = _held != null;
     final alarmAtRisk = held && _validDrop && _trace.interruptsAlarm(_level);
+    final radio = _trace.radioReadings.indexed
+        .where(
+          (entry) =>
+              entry.$2.status != RadioReception.accepted &&
+              entry.$2.status != RadioReception.quiet,
+        )
+        .firstOrNull;
+    final converter = _trace.converterInputs.entries
+        .where(
+          (entry) =>
+              entry.value.status == ConverterReception.wrongSource ||
+              entry.value.status == ConverterReception.wrongPower,
+        )
+        .firstOrNull;
     final status =
         _message ??
         (held
@@ -363,6 +461,10 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
                   : _validDrop
                   ? 'Release to place.'
                   : 'Choose a clear placement dot.')
+            : radio != null
+            ? '${_level.antennas[radio.$1].label} · ${radio.$2.status.label}'
+            : converter != null
+            ? 'Converter ${_layout.firstWhere((optic) => optic.id == converter.key).converter?.requiredSource ?? converter.key} · ${converter.value.status.label}'
             : null);
     if (status == null) return null;
     return Semantics(
@@ -380,6 +482,8 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
 
   Widget _semanticOptic(OpticalDeckGeometry geometry, Optic optic) {
     final p = geometry.project(optic.position);
+    final converter = optic.converter;
+    final canRotate = !optic.fixed && converter == null;
     final moves = <CustomSemanticsAction, VoidCallback>{
       if (_canEdit && _level.canMove(optic))
         for (final spot in _level.mounts[optic.id] ?? const <GridSpot>[])
@@ -396,12 +500,14 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
       width: 44,
       height: 44,
       child: Semantics(
-        label: optic.fixed
+        label: converter != null
+            ? 'Converter ${converter.requiredSource ?? optic.id}, channel ${converter.channel}'
+            : optic.fixed
             ? 'Fixed ${optic.kind.label.toLowerCase()}'
             : '${optic.kind.label} ${optic.id}',
-        button: !optic.fixed,
-        hint: optic.fixed ? null : 'Rotate',
-        onTap: !optic.fixed && _canEdit ? () => _rotate(optic) : null,
+        button: canRotate,
+        hint: canRotate ? 'Rotate' : null,
+        onTap: canRotate && _canEdit ? () => _rotate(optic) : null,
         customSemanticsActions: moves,
         child: const SizedBox.expand(),
       ),

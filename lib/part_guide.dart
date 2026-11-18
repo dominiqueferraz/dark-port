@@ -29,7 +29,7 @@ enum GuidePart {
   mirror(
     _PartCategory.optical,
     'Mirror',
-    'Turns the beam 90°. Its diagonal determines the new direction.',
+    'Reflects light across its marked face. An axis-aligned beam turns 90°.',
   ),
   beamSplitter(
     _PartCategory.optical,
@@ -47,6 +47,12 @@ enum GuidePart {
     'Keep it lit through every move. Losing its light trips the alarm.',
   ),
   baffle(_PartCategory.optical, 'Baffle', 'Stops any beam that reaches it.'),
+  opticalConverter(
+    _PartCategory.radio,
+    'Optical-to-radio converter',
+    'Reads light at its aperture and sends that strength in its marked radio direction. Some inputs require a particular laser or strength.',
+  ),
+  mesh(_PartCategory.radio, 'Mesh wall', 'Stops light and lets radio pass.'),
   transmitter(
     _PartCategory.wired,
     'Transmitter',
@@ -141,10 +147,16 @@ Set<GuidePart> opticalGuideParts(OpticalLevel board) => {
     switch (optic.kind) {
       OpticKind.mirror => GuidePart.mirror,
       OpticKind.splitter => GuidePart.beamSplitter,
+      OpticKind.converter => GuidePart.opticalConverter,
     },
   if (board.receivers.length > board.alarms.length) GuidePart.lightReceiver,
   if (board.alarms.isNotEmpty) GuidePart.opticalAlarm,
   if (board.blocks.isNotEmpty) GuidePart.baffle,
+  if (board.antennas.isNotEmpty) GuidePart.antenna,
+  if (board.barriers.any((wall) => wall.material == BarrierMaterial.mesh))
+    GuidePart.mesh,
+  if (board.barriers.any((wall) => wall.material == BarrierMaterial.concrete))
+    GuidePart.concrete,
 };
 
 Set<GuidePart> signalGuideParts(SignalBoard board) => {
@@ -330,7 +342,9 @@ Widget _symbol(GuidePart part) => switch (part) {
     lit: true,
     alarm: true,
   ),
+  GuidePart.opticalConverter => const ConverterSymbol(),
   GuidePart.baffle ||
+  GuidePart.mesh ||
   GuidePart.concrete ||
   GuidePart.interference ||
   GuidePart.feedthrough => _BarrierSymbol(part),
@@ -451,11 +465,16 @@ class _BarrierPainter extends CustomPainter {
       GuidePart.interference => const Size(20, 20),
       _ => const Size(6, 29),
     };
-    paintHatchedBarrier(
-      canvas,
-      Rect.fromCenter(center: center, width: shape.width, height: shape.height),
-      sheet,
+    final bounds = Rect.fromCenter(
+      center: center,
+      width: shape.width,
+      height: shape.height,
     );
+    if (kind == GuidePart.mesh) {
+      paintMeshBarrier(canvas, bounds, sheet);
+    } else {
+      paintHatchedBarrier(canvas, bounds, sheet);
+    }
     if (kind == GuidePart.feedthrough) {
       final jack = Rect.fromCenter(center: center, width: 11, height: 11);
       canvas.drawRect(jack, Paint()..color = sheet.paper);

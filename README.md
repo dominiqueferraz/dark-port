@@ -6,13 +6,15 @@ The required path starts with **First reflection**, **A divided beam** and **The
 
 The first time you open a tutorial lesson, a bubble explains its goal and controls. Tap **Start lesson** to play. The game remembers which lessons you’ve opened, and **Hint** shows the guidance whenever you need it.
 
-**Endless** opens the group path. Select group **1**, **Signal Routing**, to open its puzzle path from **1.1** to **1.20**. Levels **1.1–1.10** are playable and save their progress separately from the tutorial. **Edge of Coverage** branches below **Antenna Test**. Each distinct winning route earns a Solution Star, and **Night Lights** also tracks a four-cable record. See the [Endless level register](endless-level-register.md) for the fixtures and solution checks.
+**Endless** opens the group path. Select group **1**, **Signal Routing**, to open its puzzle path from **1.1** to **1.20**. All 20 puzzles are playable and save their progress separately from the tutorial. **Edge of Coverage** branches below **Antenna Test**. Each distinct winning route earns a Solution Star, and **Night Lights** also tracks a four-cable record. See the [Endless level register](endless-level-register.md) for the fixtures and solution checks.
 
 **Achievements** on the title screen lists earned and unearned awards with their conditions. Tap the trophy beside the Night Lights stars to inspect its four-cable achievement.
 
 Tap an optic to rotate it or drag it to move it. On a wired board, tap an output and then an input to attach a cable. Drag loose parts to change position and hold one to mirror its ports. On Drafting sheets, loose mirrors have a dashed travel ring and fixed devices use bolt marks where they have a mounting plate. The readings show the current signal and its target. A dropped live line fails the attempt. Undo the edit or reset the board to recover.
 
-On Relay Shelf and Two Masts, tap an output and an input to preview the route and its length. The game matches the lead to the route. Tap the same input again to install it. The inventory uses the same lead symbols as the Parts guide. A move can leave an installed lead dashed if its new route fails a check.
+On Relay Shelf, Two Masts and Service and Inspection, tap an output and an input to preview the route and its length. The game matches the lead to the route. Tap the same input again to install it. The inventory uses the same lead symbols as the Parts guide. A move can leave an installed lead dashed if its new route fails a check.
+
+On conversion sheets, solid lines show light and dashed lines show radio. Mesh stops light and passes radio. Starting with One Mirror, Two Windows, match the letters on the lasers and converters. In Service and Inspection, switch between **Wired** and **Optical** to complete both circuits and replay for the three corridor stars.
 
 Open **Parts guide** with the **?** button. **This puzzle** lists the types of parts on the current board. The category tabs collect parts from boards you’ve opened in Tutorial and Endless. **Controls** covers placement, rotation, wiring, readings, and undo as applicable. The guide remembers these discoveries when you start a new Tutorial.
 
@@ -30,7 +32,7 @@ The same `flutter run -d <device-id>` command targets a booted iOS simulator or 
 
 ## Verify
 
-Run `flutter analyze` and `flutter test`. The checks cover the full tutorial and optional branch, unlocking and replay, interrupted alarms, legacy saves, serialized file writes and write retries. The Endless tests walk through levels 1.1–1.10 and exhaust their legal arrangements using the game evaluators.
+Run `flutter analyze` and `flutter test`. The checks cover the full tutorial and optional branch, unlocking and replay, interrupted alarms, legacy saves, serialized file writes and write retries. The Endless tests exercise levels 1.1–1.20 and enumerate every authored arrangement for 1.11–1.20.
 
 Run `flutter test integration_test/onboarding_test.dart -d <device-id>` for the native tutorial walkthrough or `flutter test integration_test/endless_test.dart -d <device-id>` for the Endless walkthrough. Both exercise local save storage.
 
