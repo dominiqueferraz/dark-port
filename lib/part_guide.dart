@@ -96,12 +96,12 @@ enum GuidePart {
   broadcaster(
     _PartCategory.radio,
     'Broadcaster',
-    'Sends its wired input over the air to antennas within coverage.',
+    'Takes a signal through a cable and broadcasts it as radio on the same channel.',
   ),
   antenna(
     _PartCategory.radio,
     'Antenna',
-    'Receives radio signals on its channel. Check its target to see whether it should receive a signal or stay quiet.',
+    'Receives radio on its channel from in-range broadcasters when concrete does not block the path. Check its target to see whether it should receive a signal or stay quiet.',
   ),
   concrete(
     _PartCategory.radio,
