@@ -8,6 +8,7 @@ import 'drafting_controls.dart';
 import 'drafting_theme.dart';
 import 'endless_levels.dart';
 import 'endless_picker.dart';
+import 'game_audio.dart';
 import 'game_save.dart';
 import 'optical_bay.dart';
 import 'optical_deck.dart';
@@ -23,9 +24,10 @@ import 'tutorial_picker.dart';
 import 'tutorial_progress.dart';
 
 class GameShell extends StatefulWidget {
-  const GameShell({super.key, required this.store});
+  const GameShell({super.key, required this.store, this.settingsLoaded = true});
 
   final GameStore store;
+  final bool settingsLoaded;
 
   @override
   State<GameShell> createState() => _GameShellState();
@@ -350,7 +352,13 @@ class _GameShellState extends State<GameShell> {
   });
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context) => GameAudio(
+    onBoard: widget.settingsLoaded && !_title && _board != null,
+    settings: SheetLook.of(context).audio,
+    child: _console(context),
+  );
+
+  Widget _console(BuildContext context) {
     final board = _board;
     final group = _endlessGroup;
     final safeArea = MediaQuery.paddingOf(context);

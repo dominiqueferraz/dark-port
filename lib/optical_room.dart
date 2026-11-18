@@ -7,6 +7,7 @@ import 'drafting_controls.dart';
 import 'drafting_grid.dart';
 import 'drafting_parts.dart';
 import 'drafting_theme.dart';
+import 'game_audio.dart';
 import 'optical_bay.dart';
 import 'optical_deck.dart';
 import 'part_guide.dart';
@@ -84,6 +85,7 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
       _message = null;
       _trace = traceOptics(_level, _layout);
       _persist();
+      GameAudio.play(context, BoardCue.adjust);
     });
   }
 
@@ -91,12 +93,18 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
     _layout.map((other) => other.id == optic.id ? optic : other),
   );
 
-  void _commit(Optic optic) {
+  void _commit(Optic optic, [BoardCue cue = BoardCue.place]) {
     _history.record(_layout);
     _layout = _replace(optic);
     _trace = traceOptics(_level, _layout);
     _message = null;
     _persist();
+    GameAudio.play(context, cue);
+    if (_trace.interruptsAlarm(_level)) {
+      GameAudio.play(context, BoardCue.alarm);
+    } else if (_trace.solves(_level)) {
+      GameAudio.play(context, BoardCue.solved);
+    }
   }
 
   void _restore(List<Optic> layout) => setState(() {
@@ -104,6 +112,7 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
     _trace = traceOptics(_level, _layout);
     _message = null;
     _persist();
+    GameAudio.play(context, BoardCue.adjust);
   });
 
   Optic? _hit(OpticalDeckGeometry geometry, Offset pointer) {
@@ -122,7 +131,7 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
 
   void _rotate(Optic optic) {
     if (!_canEdit || optic.fixed) return;
-    setState(() => _commit(optic.rotate()));
+    setState(() => _commit(optic.rotate(), BoardCue.turn));
   }
 
   void _tap(OpticalDeckGeometry geometry, Offset pointer) {
@@ -177,6 +186,7 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
         _trace = traceOptics(_level, _layout);
         if (!cancel && !_validDrop) {
           _message = 'Choose a clear placement dot.';
+          GameAudio.play(context, BoardCue.reject);
         }
       }
       _held = null;

@@ -103,7 +103,11 @@ Future<void> playTutorial(
       of: toolbarGroup,
       matching: find.byType(IconButton),
     );
-    expect(buttons, findsNWidgets(6));
+    expect(buttons, findsNWidgets(7));
+    expect(
+      find.descendant(of: toolbarGroup, matching: find.byTooltip('Settings')),
+      findsOneWidget,
+    );
     for (var i = 0; i < buttons.evaluate().length; i++) {
       final button = buttons.at(i);
       final bounds = tester.getRect(button);
@@ -129,7 +133,8 @@ Future<void> playTutorial(
     expectPanelAlignment();
     final pane = tester.getRect(details);
     final window = tester.getRect(viewport);
-    expect(window.width / (window.width + pane.width), closeTo(.7, .005));
+    final columnsWidth = window.width + pane.width;
+    expect(pane.width, closeTo(math.max(columnsWidth * .3, 232), .5));
     final verticalMargin =
         math.max(insets.top, insets.bottom) +
         7 +

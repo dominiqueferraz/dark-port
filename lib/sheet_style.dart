@@ -5,6 +5,7 @@ import 'dart:ui' show ImageFilter;
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 
+import 'audio_settings.dart';
 import 'part_symbols.dart';
 
 /// A complete look for the drawn screens: paper, inks and paper texture.
@@ -121,39 +122,54 @@ class SheetStyle {
       all.firstWhere((style) => style.id == id, orElse: () => fallback);
 }
 
-/// The look chosen in settings.
+/// Player preferences saved together in settings.
 @immutable
 class SheetLookChoice {
   const SheetLookChoice({
     this.style = SheetStyle.fallback,
     this.symbols = PartSymbols.fallback,
+    this.audio = const AudioSettings(),
   });
 
   final SheetStyle style;
   final PartSymbols symbols;
+  final AudioSettings audio;
 
-  SheetLookChoice copyWith({SheetStyle? style, PartSymbols? symbols}) =>
-      SheetLookChoice(
-        style: style ?? this.style,
-        symbols: symbols ?? this.symbols,
-      );
+  SheetLookChoice copyWith({
+    SheetStyle? style,
+    PartSymbols? symbols,
+    AudioSettings? audio,
+  }) => SheetLookChoice(
+    style: style ?? this.style,
+    symbols: symbols ?? this.symbols,
+    audio: audio ?? this.audio,
+  );
 
-  Map<String, Object?> toJson() => {'style': style.id, 'symbols': symbols.id};
+  Map<String, Object?> toJson() => {
+    'style': style.id,
+    'symbols': symbols.id,
+    'audio': audio.toJson(),
+  };
 
   factory SheetLookChoice.fromJson(Map<String, Object?> json) =>
       SheetLookChoice(
         style: SheetStyle.byId(json['style'] as String?),
         symbols: PartSymbols.byId(json['symbols'] as String?),
+        audio: switch (json['audio']) {
+          final Map<String, Object?> sound => AudioSettings.fromJson(sound),
+          _ => const AudioSettings(),
+        },
       );
 
   @override
   bool operator ==(Object other) =>
       other is SheetLookChoice &&
       other.style == style &&
-      other.symbols == symbols;
+      other.symbols == symbols &&
+      other.audio == audio;
 
   @override
-  int get hashCode => Object.hash(style, symbols);
+  int get hashCode => Object.hash(style, symbols, audio);
 }
 
 /// Makes the chosen look available to every screen and dialog.
@@ -186,7 +202,7 @@ extension SheetLookContext on BuildContext {
   PartSymbols get symbols => SheetLook.of(this).symbols;
 }
 
-/// Saves the chosen look on the device, next to the game save.
+/// Saves preferences on the device, next to the game save.
 class SettingsStore {
   SettingsStore({Future<File> Function()? locate})
     : _locate = locate ?? _settingsFile;
@@ -199,7 +215,7 @@ class SettingsStore {
     return File('${directory.path}/settings.json');
   }
 
-  /// The saved look, or the default one if nothing usable is saved.
+  /// The saved preferences, or defaults if nothing usable is saved.
   Future<SheetLookChoice> load() async {
     await _pending;
     try {

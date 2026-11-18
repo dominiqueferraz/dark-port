@@ -1,0 +1,10 @@
+// Dark Port ambient music
+// Render cycles 0–8 at 48 kHz in Strudel with Multi Channel Orbits off.
+// Keep seconds 12–24 as assets/audio/ambient.wav. The first phrase lets the
+// pad's release settle before the point where the shipped audio loops.
+
+setcpm(20)
+$: note("<[d3,a3] [d3,g3] [c3,g3] [d3,a3]>")
+  .s("triangle").hpf(145).lpf(750).attack(.4).release(.6).gain(.12)
+$: note("<[~ a4 ~ ~] [~ ~ e5 ~] [~ g4 ~ d5] [~ ~ ~ ~]>")
+  .s("sine").decay(.18).sustain(0).gain(.07)

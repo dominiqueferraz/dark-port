@@ -8,6 +8,7 @@ import 'board_history.dart';
 import 'drafting_controls.dart';
 import 'drafting_parts.dart';
 import 'drafting_theme.dart';
+import 'game_audio.dart';
 import 'part_guide.dart';
 import 'lead_stock.dart';
 import 'placement_nodes.dart';
@@ -203,7 +204,10 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
             ? (link: link, type: issue == null ? type : null)
             : null;
         _message = issue == null ? null : _cableMessage(issue, link, type);
-        if (issue != null) return;
+        if (issue != null) {
+          GameAudio.play(context, BoardCue.reject);
+          return;
+        }
         if (_hasSpecialtyLeads && !confirmed) {
           _message =
               '${_distance(link)} units. Tap the input again to install.';
@@ -213,6 +217,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
         _preview = null;
         if (!_state.links.contains(link) || _state.leadType(link) != type) {
           _edit(
+            BoardCue.connect,
             links: [
               ..._state.links.where(
                 (other) => other.to != device.id || other.input != link.input,
@@ -245,7 +250,8 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
         100,
   );
 
-  void _edit({
+  void _edit(
+    BoardCue cue, {
     List<SignalLink>? links,
     Map<String, SignalPoint>? positions,
     Set<String>? flipped,
@@ -263,6 +269,12 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
       leadTypes: leadTypes,
     );
     if (next.solved && !_state.solved) _clearSelection();
+    GameAudio.play(context, cue);
+    if (next.alarmFailed && !_state.alarmFailed) {
+      GameAudio.play(context, BoardCue.alarm);
+    } else if (next.solved && !_state.solved) {
+      GameAudio.play(context, BoardCue.solved);
+    }
     widget.onChange(next);
   }
 
@@ -276,7 +288,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     if (!_canMove(id, point)) return;
     setState(() {
       _clearSelection();
-      _edit(positions: {..._state.positions, id: point});
+      _edit(BoardCue.place, positions: {..._state.positions, id: point});
     });
   }
 
@@ -309,7 +321,12 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     final drag = _drag;
     if (drag == null || (id != null && id != drag.id)) return;
     setState(() => _drag = null);
-    if (drag.node case final node? when !cancel) _move(drag.id, node);
+    if (cancel) return;
+    if (drag.node case final node? when _validDrop(drag)) {
+      _move(drag.id, node);
+    } else {
+      GameAudio.play(context, BoardCue.reject);
+    }
   }
 
   bool _validDrop(_PartDrag drag) {
@@ -339,10 +356,11 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
         )) {
       _inspected = cable.to;
       _message = 'Disconnecting this feed would interrupt the alarm blocker.';
+      GameAudio.play(context, BoardCue.reject);
       return;
     }
     _clearSelection();
-    _edit(links: links);
+    _edit(BoardCue.disconnect, links: links);
   });
 
   void _flip(SignalDevice device) {
@@ -361,9 +379,10 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
       _inspected = device.id;
       if (_board.interruptsAlarm(deliveries)) {
         _message = 'Flipping this part would take the blocker out of range.';
+        GameAudio.play(context, BoardCue.reject);
         return;
       }
-      _edit(flipped: flipped);
+      _edit(BoardCue.turn, flipped: flipped);
     });
   }
 
@@ -371,12 +390,14 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     _clearSelection();
     _animatePulse = false;
     widget.onChange(_history.undo(_state));
+    GameAudio.play(context, BoardCue.adjust);
   });
 
   void _redo() => setState(() {
     _clearSelection();
     _animatePulse = false;
     widget.onChange(_history.redo(_state));
+    GameAudio.play(context, BoardCue.adjust);
   });
 
   void _reset() => setState(() {
@@ -384,6 +405,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     _animatePulse = false;
     _history.record(_state);
     widget.onChange(SignalBoardState(_board));
+    GameAudio.play(context, BoardCue.adjust);
   });
 
   SignalDelivery? _incoming(
@@ -977,7 +999,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
                             : () => setState(() {
                                 _output = null;
                                 _message = null;
-                                _edit(losses: choices[loss]);
+                                _edit(BoardCue.adjust, losses: choices[loss]);
                               }),
                         icon: Text(
                           loss == 0 ? '0' : '−$loss',

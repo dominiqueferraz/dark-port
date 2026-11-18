@@ -32,13 +32,18 @@ class _DarkPortState extends State<DarkPort> {
   late final _settings = widget.settings ?? SettingsStore();
   var _look = const SheetLookChoice();
   var _changed = false;
+  var _settingsLoaded = false;
 
   @override
   void initState() {
     super.initState();
     unawaited(
       _settings.load().then((look) {
-        if (mounted && !_changed) setState(() => _look = look);
+        if (!mounted) return;
+        setState(() {
+          _settingsLoaded = true;
+          if (!_changed) _look = look;
+        });
       }),
     );
   }
@@ -73,7 +78,7 @@ class _DarkPortState extends State<DarkPort> {
             surfaceTint: Colors.transparent,
           ),
         ),
-        home: GameShell(store: _store),
+        home: GameShell(store: _store, settingsLoaded: _settingsLoaded),
       ),
     );
   }

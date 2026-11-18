@@ -2,14 +2,14 @@ import 'dart:ui' show PointMode;
 
 import 'package:flutter/material.dart';
 
+import 'audio_settings.dart';
 import 'drafting_controls.dart';
 import 'drafting_theme.dart';
 import 'optical_bay.dart';
 import 'part_symbols.dart';
 import 'sheet_style.dart';
 
-/// Lets the player pick the sheet style and the signs used for parts.
-/// Each option is previewed with the real drawing code.
+/// Sound and appearance preferences.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -17,6 +17,9 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final look = SheetLook.of(context);
     final change = SheetLook.changerOf(context);
+    final audio = look.audio;
+    void changeAudio(AudioSettings settings) =>
+        change?.call(look.copyWith(audio: settings));
     return DraftingScaffold(
       child: DraftingSheet(
         child: Column(
@@ -24,61 +27,200 @@ class SettingsScreen extends StatelessWidget {
           children: [
             ConsoleHeader(
               title: 'SETTINGS',
-              caption: 'DRAWING STANDARDS',
               backLabel: 'Back',
               onBack: () => Navigator.of(context).pop(),
             ),
             Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.only(top: 12),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _SectionLabel('STYLE'),
-                    _OptionRow(
-                      children: [
-                        for (final style in SheetStyle.all)
-                          _OptionCard(
-                            label: style.name,
-                            selected: style == look.style,
-                            onTap: change == null
-                                ? null
-                                : () => change(look.copyWith(style: style)),
-                            preview: SheetBackground(
-                              style: style,
-                              child: CustomPaint(
-                                painter: _SheetPreview(style, look.symbols),
+              child: Material(
+                type: MaterialType.transparency,
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      const _SectionLabel('AUDIO'),
+                      _VolumeControl(
+                        label: 'Master volume',
+                        value: audio.masterVolume,
+                        onChanged: change == null
+                            ? null
+                            : (value) => changeAudio(
+                                audio.copyWith(masterVolume: value),
+                              ),
+                      ),
+                      _VolumeControl(
+                        label: 'Music volume',
+                        value: audio.musicVolume,
+                        onChanged: change == null
+                            ? null
+                            : (value) => changeAudio(
+                                audio.copyWith(musicVolume: value),
+                              ),
+                        tick: _AudioTick(
+                          label: 'Music enabled',
+                          checked: audio.musicEnabled,
+                          onPressed: change == null
+                              ? null
+                              : () => changeAudio(
+                                  audio.copyWith(
+                                    musicEnabled: !audio.musicEnabled,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      _VolumeControl(
+                        label: 'Effects volume',
+                        value: audio.effectsVolume,
+                        onChanged: change == null
+                            ? null
+                            : (value) => changeAudio(
+                                audio.copyWith(effectsVolume: value),
+                              ),
+                        tick: _AudioTick(
+                          label: 'Effects enabled',
+                          checked: audio.effectsEnabled,
+                          onPressed: change == null
+                              ? null
+                              : () => changeAudio(
+                                  audio.copyWith(
+                                    effectsEnabled: !audio.effectsEnabled,
+                                  ),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _SectionLabel('STYLE'),
+                      _OptionRow(
+                        children: [
+                          for (final style in SheetStyle.all)
+                            _OptionCard(
+                              label: style.name,
+                              selected: style == look.style,
+                              onTap: change == null
+                                  ? null
+                                  : () => change(look.copyWith(style: style)),
+                              preview: SheetBackground(
+                                style: style,
+                                child: CustomPaint(
+                                  painter: _SheetPreview(style, look.symbols),
+                                ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _SectionLabel('PART SYMBOLS'),
-                    _OptionRow(
-                      children: [
-                        for (final symbols in PartSymbols.all)
-                          _OptionCard(
-                            label: symbols.name,
-                            detail: symbols.description,
-                            selected: symbols == look.symbols,
-                            onTap: change == null
-                                ? null
-                                : () => change(look.copyWith(symbols: symbols)),
-                            preview: SheetBackground(
-                              style: look.style,
-                              child: CustomPaint(
-                                painter: _SymbolsPreview(look.style, symbols),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      _SectionLabel('PART SYMBOLS'),
+                      _OptionRow(
+                        children: [
+                          for (final symbols in PartSymbols.all)
+                            _OptionCard(
+                              label: symbols.name,
+                              detail: symbols.description,
+                              selected: symbols == look.symbols,
+                              onTap: change == null
+                                  ? null
+                                  : () =>
+                                        change(look.copyWith(symbols: symbols)),
+                              preview: SheetBackground(
+                                style: look.style,
+                                child: CustomPaint(
+                                  painter: _SymbolsPreview(look.style, symbols),
+                                ),
                               ),
                             ),
-                          ),
-                      ],
-                    ),
-                  ],
+                        ],
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _VolumeControl extends StatelessWidget {
+  const _VolumeControl({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+    this.tick,
+  });
+
+  final String label;
+  final double value;
+  final ValueChanged<double>? onChanged;
+  final _AudioTick? tick;
+
+  String _percent(double value) => '${(value * 100).round()}%';
+
+  @override
+  Widget build(BuildContext context) => Row(
+    children: [
+      SizedBox(width: 92, child: Text(label, style: draftingLettering(12))),
+      Expanded(
+        child: Semantics(
+          label: label,
+          child: Slider.adaptive(
+            value: value,
+            divisions: 20,
+            label: _percent(value),
+            semanticFormatterCallback: _percent,
+            onChanged: onChanged,
+          ),
+        ),
+      ),
+      ExcludeSemantics(
+        child: SizedBox(
+          width: 40,
+          child: Text(
+            _percent(value),
+            textAlign: TextAlign.right,
+            style: draftingLettering(12),
+          ),
+        ),
+      ),
+      tick ?? SizedBox.fromSize(size: consoleButtonSize),
+    ],
+  );
+}
+
+class _AudioTick extends StatelessWidget {
+  const _AudioTick({
+    required this.label,
+    required this.checked,
+    required this.onPressed,
+  });
+
+  final String label;
+  final bool checked;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final ink = onPressed == null ? context.sheet.faint : context.sheet.ink;
+    return Semantics(
+      label: label,
+      checked: checked,
+      enabled: onPressed != null,
+      onTap: onPressed,
+      excludeSemantics: true,
+      child: SizedBox.fromSize(
+        size: consoleButtonSize,
+        child: consoleButton(
+          tooltip: label,
+          onPressed: onPressed,
+          icon: Container(
+            width: 18,
+            height: 18,
+            decoration: BoxDecoration(
+              border: Border.all(color: ink, width: .9),
+            ),
+            child: checked ? Icon(Icons.check, size: 14, color: ink) : null,
+          ),
         ),
       ),
     );

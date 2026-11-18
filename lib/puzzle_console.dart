@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import 'achievements.dart';
@@ -5,6 +7,7 @@ import 'drafting_controls.dart';
 import 'drafting_grid.dart';
 import 'drafting_theme.dart';
 import 'endless_levels.dart';
+import 'settings_screen.dart';
 import 'sheet_style.dart';
 import 'solution_stars.dart';
 
@@ -85,6 +88,8 @@ class PuzzleConsole extends StatelessWidget {
   static const _awardSize = 16.0;
   static const _awardInset = 4.0;
   static const _awardCell = _awardSize + 2 * _awardInset;
+  // Seven toolbar buttons have room for their icons and the ruled dividers.
+  static const _minSettingsToolbarWidth = 232.0;
 
   @override
   Widget build(BuildContext context) => DraftingScaffold(
@@ -145,19 +150,27 @@ class PuzzleConsole extends StatelessWidget {
 
   Widget _wideLayout(BuildContext context) {
     return DraftingSheet(
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            flex: 7,
-            child: KeyedSubtree(
-              key: const ValueKey('landscape-viewport'),
-              child: _blueprint(context),
-            ),
-          ),
-          const SizedBox(width: DraftingSheetFrame.panelGap),
-          Expanded(flex: 3, child: _wideControls(context)),
-        ],
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final available = constraints.maxWidth - DraftingSheetFrame.panelGap;
+          final reservedWidth = available * .3;
+          final controlWidth = SheetLook.changerOf(context) == null
+              ? reservedWidth
+              : math.max(reservedWidth, _minSettingsToolbarWidth);
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: KeyedSubtree(
+                  key: const ValueKey('landscape-viewport'),
+                  child: _blueprint(context),
+                ),
+              ),
+              const SizedBox(width: DraftingSheetFrame.panelGap),
+              SizedBox(width: controlWidth, child: _wideControls(context)),
+            ],
+          );
+        },
       ),
     );
   }
@@ -379,6 +392,22 @@ class PuzzleConsole extends StatelessWidget {
                 tooltip: 'Parts guide',
                 onPressed: help,
                 icon: const Icon(Icons.help_outline),
+              ),
+            ),
+          ],
+          if (SheetLook.changerOf(context) != null) ...[
+            const DraftingCellDivider(),
+            Expanded(
+              child: consoleButton(
+                tooltip: 'Settings',
+                onPressed: canLeave
+                    ? () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                          builder: (_) => const SettingsScreen(),
+                        ),
+                      )
+                    : null,
+                icon: const Icon(Icons.tune),
               ),
             ),
           ],
