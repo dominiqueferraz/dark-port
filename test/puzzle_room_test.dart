@@ -15,9 +15,11 @@ void main() {
       final navigation = PuzzleNavigation(
         backLabel: 'Practice menu',
         onBack: () => leaves++,
-        advanceLabel: 'Next practice board',
-        advanceIcon: Icons.arrow_forward,
-        onAdvance: () => fail('Neither practice board has been solved.'),
+        advance: (
+          label: 'Next practice board',
+          icon: Icons.arrow_forward,
+          onPressed: () => fail('Neither practice board has been solved.'),
+        ),
       );
       List<Optic>? opticalLayout;
       SignalBoardState? signalState;

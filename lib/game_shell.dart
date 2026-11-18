@@ -12,6 +12,7 @@ import 'game_save.dart';
 import 'optical_bay.dart';
 import 'optical_deck.dart';
 import 'optical_room.dart';
+import 'part_guide.dart';
 import 'puzzle_console.dart';
 import 'settings_screen.dart';
 import 'sheet_style.dart';
@@ -108,6 +109,7 @@ class _GameShellState extends State<GameShell> {
     final fresh = TutorialProgress(
       endlessBoards: _progress?.endlessBoards ?? {},
       endlessResults: _progress?.endlessResults ?? {},
+      opened: _progress?.opened ?? {},
     );
     final saved = await _write(fresh);
     if (!mounted) return;
@@ -163,25 +165,41 @@ class _GameShellState extends State<GameShell> {
   void _openLesson(TutorialLesson lesson) {
     final progress = _progress!;
     if (!progress.isUnlocked(lesson)) return;
-    setState(() {
-      _replaying = progress.isComplete(lesson);
-      _board = _replaying
-          ? GameSave(lesson)
-          : progress.boards[lesson.id] ?? GameSave(lesson);
-      _lessonSession++;
-    });
+    _openBoard(
+      lesson,
+      saved: progress.boards[lesson.id],
+      replay: progress.isComplete(lesson),
+    );
   }
 
   void _openEndlessLevel(EndlessLevel level) {
     final lesson = level.lesson;
     if (lesson == null) return;
     final saved = _progress?.endlessBoards[lesson.id];
+    _openBoard(
+      lesson,
+      saved: saved,
+      replay: saved?.solved == true,
+      endlessLevel: level,
+    );
+  }
+
+  void _openBoard(
+    TutorialLesson lesson, {
+    GameSave? saved,
+    required bool replay,
+    EndlessLevel? endlessLevel,
+  }) {
+    final previous = _progress ?? TutorialProgress(tutorialStarted: false);
+    final progress = previous.open(lesson);
     setState(() {
-      _endlessFocus = level;
-      _replaying = saved?.solved == true;
-      _board = _replaying ? GameSave(lesson) : saved ?? GameSave(lesson);
+      _progress = progress;
+      _endlessFocus = endlessLevel;
+      _replaying = replay;
+      _board = replay ? GameSave(lesson) : saved ?? GameSave(lesson);
       _lessonSession++;
     });
+    if (!identical(progress, previous)) unawaited(_write(progress));
   }
 
   void _openEndlessGroup(EndlessGroup group) => setState(() {
@@ -241,21 +259,26 @@ class _GameShellState extends State<GameShell> {
             (achievement: achievement, earned: achievement.isEarned(_progress)),
       ],
     );
-    final (advanceLabel, advanceIcon) = next != null
-        ? ('Next lesson', Icons.arrow_forward)
-        : progressing
-        ? ('Finish tutorial', Icons.check)
-        : (
-            _endless ? 'Back to puzzles' : 'Back to tutorial',
-            Icons.account_tree_outlined,
-          );
     final navigation = PuzzleNavigation(
       backLabel: _endless ? 'Back to puzzles' : 'Back to tutorial',
       onBack: _showPicker,
-      advanceLabel: advanceLabel,
-      advanceIcon: advanceIcon,
-      onAdvance: advance,
+      backIcon: _endless ? Icons.account_tree_outlined : Icons.arrow_back,
+      advance: progressing
+          ? (
+              label: next == null ? 'Finish tutorial' : 'Next lesson',
+              icon: next == null ? Icons.check : Icons.arrow_forward,
+              onPressed: advance,
+            )
+          : null,
     );
+    final revealedParts = {
+      for (final revealed
+          in _progress?.openedLessons ?? const <TutorialLesson>[])
+        ...switch (revealed) {
+          OpticalLesson(:final board) => opticalGuideParts(board),
+          WiredLesson(:final board) => signalGuideParts(board),
+        },
+    };
     return switch (lesson) {
       OpticalLesson() => OpticalRoom(
         key: ValueKey(_lessonSession),
@@ -263,6 +286,7 @@ class _GameShellState extends State<GameShell> {
         layout: board.layout,
         brief: brief,
         navigation: navigation,
+        revealedParts: revealedParts,
         onChange: (layout) => _changed(GameSave(lesson, layout: layout)),
       ),
       WiredLesson() => SignalRoom(
@@ -270,6 +294,7 @@ class _GameShellState extends State<GameShell> {
         boardState: board.signal!,
         brief: brief,
         navigation: navigation,
+        revealedParts: revealedParts,
         onChange: (state) => _changed(GameSave.fromSignal(lesson, state)),
       ),
     };

@@ -9,7 +9,7 @@ import 'drafting_controls.dart';
 import 'drafting_parts.dart';
 import 'drafting_theme.dart';
 import 'part_guide.dart';
-import 'patch_lead_stock.dart';
+import 'lead_stock.dart';
 import 'placement_nodes.dart';
 import 'puzzle_console.dart';
 import 'sheet_style.dart';
@@ -58,12 +58,14 @@ class SignalRoom extends StatefulWidget {
     required this.brief,
     required this.navigation,
     required this.onChange,
+    this.revealedParts = const {},
   });
 
   final SignalBoardState boardState;
   final PuzzleBrief brief;
   final PuzzleNavigation navigation;
   final ValueChanged<SignalBoardState> onChange;
+  final Set<GuidePart> revealedParts;
 
   @override
   State<SignalRoom> createState() => _SignalRoomState();
@@ -74,6 +76,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
   final _history = BoardHistory<SignalBoardState>();
   _PartDrag? _drag;
   SignalOutput? _output;
+  ({SignalLink link, LeadType? type})? _preview;
   String? _inspected;
   String? _message;
   int _pulseRevision = 0;
@@ -82,6 +85,8 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
   SignalBoardState get _state => widget.boardState;
   SignalBoard get _board => _state.board;
   SignalDevice _device(String id) => _board.device(id)!;
+  bool get _hasSpecialtyLeads =>
+      _board.shieldedLeadStock > 0 || _board.trunkLeadStock > 0;
 
   @override
   void initState() {
@@ -100,12 +105,55 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     if (state != AppLifecycleState.resumed) _finishDrag(cancel: true);
   }
 
-  LinkIssue? _linkIssue(SignalLink link) => _board.linkIssue(
+  LinkIssue? _linkIssue(SignalLink link, LeadType type) => _board.linkIssue(
     _state.links,
     link,
     positions: _state.positions,
     flipped: _state.flipped,
+    type: type,
+    leadTypes: _state.leadTypes,
   );
+
+  ({LeadType type, LinkIssue? issue}) _connectionFor(SignalLink link) {
+    final patchIssue = _linkIssue(link, LeadType.patch);
+    // Ordinary routes use patch stock. A specialist cable is chosen only
+    // when a physical constraint prevents using a patch lead.
+    if (patchIssue == LinkIssue.interference ||
+        patchIssue == LinkIssue.feedthrough) {
+      for (final type in [LeadType.shielded, LeadType.trunk]) {
+        if (_board.leadStock(type) == 0) continue;
+        final issue = _linkIssue(link, type);
+        if (issue == null ||
+            issue == LinkIssue.stock ||
+            issue == LinkIssue.occupied) {
+          return (type: type, issue: issue);
+        }
+      }
+    }
+    return (type: LeadType.patch, issue: patchIssue);
+  }
+
+  LinkIssue? _installedIssue(
+    SignalLink link,
+    Map<String, SignalPoint> positions,
+  ) => _board.cableIssue(
+    link,
+    positions,
+    flipped: _state.flipped,
+    type: _state.leadType(link),
+  );
+
+  String _cableMessage(
+    LinkIssue issue,
+    SignalLink link,
+    LeadType type,
+  ) => switch (issue) {
+    LinkIssue.range =>
+      'Needs ${_distance(link)} length units. Output reaches ${_board.leadReach(link.from, type)}.',
+    LinkIssue.stock =>
+      'No ${type.label.toLowerCase()}s left. Disconnect a cable to free one.',
+    _ => issue.message,
+  };
 
   int? _freeOutput(SignalDevice device) =>
       Iterable<int>.generate(device.outputs)
@@ -135,6 +183,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
       _inspected = device.id;
       if (_state.alarmFailed) {
         _output = null;
+        _preview = null;
         _message = null;
         return;
       }
@@ -148,13 +197,21 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
           input: input ?? _freeInput(device),
           output: output.port,
         );
-        final issue = _linkIssue(link);
-        _message = issue == LinkIssue.range
-            ? 'Needs ${_distance(link)} length units. Output reaches ${_device(output.id).range}.'
-            : issue?.message;
+        final (:type, :issue) = _connectionFor(link);
+        final confirmed = _preview == (link: link, type: type);
+        _preview = _hasSpecialtyLeads
+            ? (link: link, type: issue == null ? type : null)
+            : null;
+        _message = issue == null ? null : _cableMessage(issue, link, type);
         if (issue != null) return;
+        if (_hasSpecialtyLeads && !confirmed) {
+          _message =
+              '${_distance(link)} units. Tap the input again to install.';
+          return;
+        }
         _output = null;
-        if (!_state.links.contains(link)) {
+        _preview = null;
+        if (!_state.links.contains(link) || _state.leadType(link) != type) {
           _edit(
             links: [
               ..._state.links.where(
@@ -162,9 +219,11 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
               ),
               link,
             ],
+            leadTypes: {..._state.leadTypes, link: type},
           );
         }
       } else {
+        _preview = null;
         final port = outputPort ?? _freeOutput(device);
         _output =
             input == null &&
@@ -191,6 +250,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     Map<String, SignalPoint>? positions,
     Set<String>? flipped,
     Map<String, int>? losses,
+    Map<SignalLink, LeadType>? leadTypes,
   }) {
     _pulseRevision++;
     _animatePulse = true;
@@ -200,6 +260,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
       positions: positions,
       flipped: flipped,
       losses: losses,
+      leadTypes: leadTypes,
     );
     if (next.solved && !_state.solved) _clearSelection();
     widget.onChange(next);
@@ -238,7 +299,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     final drag = _drag;
     if (drag == null || drag.id != id) return;
     final point = geometry.unproject(_onBoard(global) - drag.grab);
-    final node = _board.snapAt(point);
+    final node = _board.snapAt(point, id: id);
     if (node != drag.node) {
       setState(() => _drag = (id: id, grab: drag.grab, node: node));
     }
@@ -259,6 +320,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
 
   void _clearSelection() {
     _output = null;
+    _preview = null;
     _inspected = null;
     _message = null;
   }
@@ -272,6 +334,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
             positions: _state.positions,
             flipped: _state.flipped,
             losses: _state.losses,
+            leadTypes: _state.leadTypes,
           ),
         )) {
       _inspected = cable.to;
@@ -291,6 +354,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
       positions: _state.positions,
       flipped: flipped,
       losses: _state.losses,
+      leadTypes: _state.leadTypes,
     );
     setState(() {
       _clearSelection();
@@ -325,15 +389,31 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
   SignalDelivery? _incoming(
     SignalDevice device, [
     Map<SignalLink, SignalDelivery>? deliveries,
-  ]) => (deliveries ?? _state.deliveries).entries
-      .where((entry) => entry.key.to == device.id)
-      .firstOrNull
-      ?.value;
+  ]) {
+    final incoming = (deliveries ?? _state.deliveries).entries
+        .where((entry) => entry.key.to == device.id)
+        .map((entry) => entry.value);
+    if (device.kind != SignalDeviceKind.antenna) return incoming.firstOrNull;
+    final matching = incoming.where(
+      (delivery) => delivery.channel == device.channel,
+    );
+    if (device.mustBeQuiet) {
+      return matching.where((delivery) => delivery.strength > 0).firstOrNull;
+    }
+    return matching
+            .where(
+              (delivery) => device.read(delivery) == SignalReading.accepted,
+            )
+            .firstOrNull ??
+        matching.firstOrNull ??
+        incoming.firstOrNull;
+  }
 
   String _value(double strength) =>
       strength.toStringAsFixed(2).replaceFirst(RegExp(r'\.?0+$'), '');
 
   String _band(SignalDevice device) {
+    if (device.mustBeQuiet) return '0';
     final minimum = _value(device.minimumStrength!);
     if (device.maximumStrength == null) return '≥$minimum';
     final maximum = _value(device.maximumStrength!);
@@ -380,26 +460,30 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     final isBlocker = goal == _board.alarm?.blocker;
     final alarm = isBlocker ? _board.alarmPower(deliveries) : null;
     final reading = alarm?.reading ?? goal.read(delivery);
-    final onTarget =
-        reading == SignalReading.accepted &&
-        (!isBlocker ||
-            alarm!.sources.length == 1 &&
-                alarm.sources.contains(_board.alarm?.source));
-    final status = switch (reading) {
-      SignalReading.quiet =>
-        _radioFailure(goal, deliveries, positions)?.status ?? 'No signal',
-      SignalReading.wrongChannel => 'Wrong channel',
-      SignalReading.wrongSource =>
-        'Needs ${_device(goal.requiredSource!).name}',
-      SignalReading.weak => 'Too weak',
-      SignalReading.strong => 'Too strong',
-      SignalReading.accepted =>
-        alarm == null
-            ? 'Online'
-            : 'Holding on ${alarm.sources.map((id) => _device(id).name).join(' and ')}',
-    };
-    final invalidSignal =
-        reading != SignalReading.quiet && reading != SignalReading.accepted;
+    final onTarget = goal.mustBeQuiet
+        ? delivery == null
+        : reading == SignalReading.accepted &&
+              (!isBlocker ||
+                  alarm!.sources.length == 1 &&
+                      alarm.sources.contains(_board.alarm?.source));
+    final status = goal.mustBeQuiet
+        ? (onTarget ? 'Quiet' : 'Signal detected')
+        : switch (reading) {
+            SignalReading.quiet =>
+              _radioFailure(goal, deliveries, positions)?.status ?? 'No signal',
+            SignalReading.wrongChannel => 'Wrong channel',
+            SignalReading.wrongSource =>
+              'Needs ${_device(goal.requiredSource!).name}',
+            SignalReading.weak => 'Too weak',
+            SignalReading.strong => 'Too strong',
+            SignalReading.accepted =>
+              alarm == null
+                  ? 'Online'
+                  : 'Holding on ${alarm.sources.map((id) => _device(id).name).join(' and ')}',
+          };
+    final invalidSignal = goal.mustBeQuiet
+        ? !onTarget
+        : reading != SignalReading.quiet && reading != SignalReading.accepted;
     final tone = onTarget
         ? (isBlocker ? PartTone.alarmLit : PartTone.lit)
         : invalidSignal
@@ -479,11 +563,9 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
       },
       _ => _state.positions,
     };
-    final beyondReach = _state.links
-        .where(
-          (link) => !_board.inReach(link, positions, flipped: _state.flipped),
-        )
-        .toSet();
+    final cableIssues = {
+      for (final link in _state.links) link: ?_installedIssue(link, positions),
+    };
     final validDrop = drag != null && _validDrop(drag);
     final deliveries = validDrop
         ? _board.evaluate(
@@ -491,6 +573,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
             positions: positions,
             flipped: _state.flipped,
             losses: _state.losses,
+            leadTypes: _state.leadTypes,
           )
         : _state.deliveries;
     final alarmAtRisk = validDrop && _board.interruptsAlarm(deliveries);
@@ -503,17 +586,24 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
         ? null
         : _inspector(_device(_inspected!));
     final radioWarning = _board.goals
+        .where(
+          (goal) => !goal.mustBeQuiet && _incoming(goal, deliveries) == null,
+        )
         .map((goal) => _radioFailure(goal, deliveries, positions))
         .nonNulls
         .firstOrNull;
+    final failedCable = cableIssues.entries.firstOrNull;
     final pathWarning =
         alarmWarning ??
-        (beyondReach.isEmpty ? null : 'Dashed cables are out of reach.') ??
+        (failedCable == null
+            ? null
+            : _board.cableCorridors == null
+            ? 'Dashed cables are out of reach.'
+            : '${_state.leadType(failedCable.key).label} · ${_cableMessage(failedCable.value, failedCable.key, _state.leadType(failedCable.key))}') ??
         radioWarning?.warning;
     final visibleDeliveries = drag != null && !validDrop
         ? const <SignalLink, SignalDelivery>{}
         : deliveries;
-    final stock = _board.patchLeadStock;
     return PuzzleConsole(
       brief: widget.brief,
       navigation: widget.navigation,
@@ -521,7 +611,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
       playfield: SignalPlayfield(
         state: _state,
         positions: positions,
-        beyondReach: beyondReach,
+        beyondReach: cableIssues.keys.toSet(),
         deliveries: visibleDeliveries,
         awardBounds: widget.brief.awardBounds,
         inspectedPart: _inspected,
@@ -529,6 +619,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
             ? null
             : (id: drag.id, node: drag.node, valid: validDrop),
         selectedOutput: _output,
+        preview: drag == null ? _preview?.link : null,
         animatedRevision: drag == null && _animatePulse ? _pulseRevision : null,
         surfaceKey: _surface,
         onBackgroundTap: () => setState(_clearSelection),
@@ -536,15 +627,13 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
             _movablePart(device, geometry, visibleDeliveries),
       ),
       readings: _partsList(deliveries, positions),
-      inventory: stock == null
-          ? null
-          : PatchLeadStock(
-              key: const ValueKey('patch-lead-stock'),
-              total: stock,
-              installed: _state.links.length,
-            ),
+      inventory: _inventory(),
       canLeave: drag == null,
-      onHelp: () => showPartGuide(context, wiredFirst: true),
+      onHelp: () => showPartGuide(
+        context,
+        puzzleParts: signalGuideParts(_board),
+        revealedParts: widget.revealedParts,
+      ),
       solved: drag == null && _state.solved,
       feedback: [
         if (pathWarning != null)
@@ -578,6 +667,30 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     );
   }
 
+  Widget? _inventory() {
+    if (_board.patchLeadStock == null) return null;
+    return Padding(
+      key: const ValueKey('cable-inventory'),
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 5),
+      child: Wrap(
+        spacing: 9,
+        runSpacing: 4,
+        children: [
+          for (final type in LeadType.values)
+            if (_board.leadStock(type) case final total? when total > 0)
+              LeadStock(
+                key: ValueKey('${type.name}-lead-stock'),
+                type: type,
+                total: total,
+                installed: _state.links
+                    .where((link) => _state.leadType(link) == type)
+                    .length,
+              ),
+        ],
+      ),
+    );
+  }
+
   Widget _movablePart(
     SignalDevice device,
     SignalBoardGeometry geometry,
@@ -603,12 +716,12 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     ];
     final inputAvailable =
         output != null &&
-        _linkIssue((
+        _connectionFor((
               from: output.id,
               to: device.id,
               input: _freeInput(device),
               output: output.port,
-            )) ==
+            )).issue ==
             null;
     final selected = output?.id == device.id || _inspected == device.id;
     final held = _drag?.id == device.id;
@@ -635,7 +748,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
         ('up', 0, -1),
         ('down', 0, 1),
       ]) {
-        final candidates = _board.placementNodes.where((node) {
+        final candidates = _board.mountsFor(device.id).where((node) {
           final offset = node.position - point;
           final along = offset.x * dx + offset.y * dy;
           final across = (offset.x * dy - offset.y * dx).abs();
@@ -751,6 +864,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
             : '${_value(incoming.strength / device.outputs)} u',
       SignalDeviceKind.receiver ||
       SignalDeviceKind.antenna ||
+      SignalDeviceKind.relay ||
       SignalDeviceKind.broadcaster =>
         incoming != null
             ? '${_value(incoming.strength)} u'
@@ -919,21 +1033,24 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     final cables = _state.links.where(
       (link) => link.from == device.id || link.to == device.id,
     );
-    final dashed = cables
-        .where(
-          (link) =>
-              !_board.inReach(link, _state.positions, flipped: _state.flipped),
-        )
-        .firstOrNull;
+    final invalid = [
+      for (final link in cables)
+        if (_installedIssue(link, _state.positions) case final issue?)
+          (link, issue),
+    ].firstOrNull;
     final detail =
         _message ??
-        (dashed == null
+        (invalid == null
             ? null
-            : 'Cable needs ${_distance(dashed)} length units. '
-                  'Output reaches ${_device(dashed.from).range}.') ??
+            : _cableMessage(
+                invalid.$2,
+                invalid.$1,
+                _state.leadType(invalid.$1),
+              )) ??
         switch (device.kind) {
           SignalDeviceKind.transmitter ||
-          SignalDeviceKind.splitter => 'Reach ${device.range}',
+          SignalDeviceKind.splitter ||
+          SignalDeviceKind.relay => 'Reach ${device.range}',
           SignalDeviceKind.broadcaster =>
             'Coverage ${device.radioRange} steps · Channel ${device.channel}',
           SignalDeviceKind.antenna => _inspectAntenna(device),
@@ -944,6 +1061,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
         };
     final blocker = device == _board.alarm?.blocker;
     final adjustsLoss = device.initialLoss != null;
+    final previewType = _preview?.type;
     if (detail == null && !adjustsLoss && !blocker && cables.isEmpty) {
       return null;
     }
@@ -953,7 +1071,25 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
         if (detail != null)
           Semantics(
             liveRegion: true,
-            child: Text(detail, style: draftingLettering(12, spacing: .2)),
+            child: Row(
+              spacing: 6,
+              children: [
+                if (previewType != null)
+                  Semantics(
+                    label: previewType.label,
+                    child: LeadSymbol(
+                      key: const ValueKey('lead-preview-symbol'),
+                      type: previewType,
+                    ),
+                  ),
+                Expanded(
+                  child: Text(
+                    detail,
+                    style: draftingLettering(12, spacing: .2),
+                  ),
+                ),
+              ],
+            ),
           ),
         if (adjustsLoss) _attenuationControls(device),
         if (blocker) _alarmFeeds(device),
@@ -963,11 +1099,15 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
   }
 
   String _inspectAntenna(SignalDevice antenna) {
-    final details = ['Channel ${antenna.channel}'];
+    final details = [
+      'Channel ${antenna.channel}${antenna.mustBeQuiet ? ' · Target 0 u' : ''}',
+    ];
     final deliveries = _state.deliveries;
-    final radioLink = deliveries.keys
-        .where((link) => link.to == antenna.id)
-        .firstOrNull;
+    final delivery = _incoming(antenna);
+    final radioLink = deliveries.entries
+        .where((entry) => entry.key.to == antenna.id && entry.value == delivery)
+        .firstOrNull
+        ?.key;
     final mast = radioLink == null
         ? _board.devices
               .where(
@@ -978,7 +1118,6 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     if (mast == null) return details.single;
     final path = _board.radioPath(mast, antenna, _state.positions);
     details.add('${_value(path.distance)} of ${mast.radioRange} grid steps');
-    final delivery = deliveries[radioLink];
     if (delivery != null) {
       switch (antenna.read(delivery)) {
         case SignalReading.wrongChannel:
@@ -986,7 +1125,9 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
         case SignalReading.weak:
           details.add('${_value(delivery.strength)} u · Too weak');
         default:
-          details.add('${_value(delivery.strength)} u');
+          details.add(
+            '${_value(delivery.strength)} u${antenna.mustBeQuiet ? ' · Signal detected' : ''}',
+          );
       }
     } else if (_radioFailure(antenna, deliveries, _state.positions)
         case final failure?) {
@@ -1000,7 +1141,7 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
     final source = _device(cable.from);
     final input = target.dualInput ? ' ${_inputName(cable.input)}' : '';
     final route = '${source.name} → ${target.name}$input';
-    final peer = selected == target
+    final endpoint = selected == target
         ? '← ${source.name}$input'
         : '→ ${target.name}$input';
     return Row(
@@ -1010,7 +1151,14 @@ class _SignalRoomState extends State<SignalRoom> with WidgetsBindingObserver {
           onPressed: _state.alarmFailed ? null : () => _disconnect(cable),
           icon: const Icon(Icons.link_off),
         ),
-        Expanded(child: Text(peer, style: draftingLettering(12, spacing: .2))),
+        if (_hasSpecialtyLeads)
+          Semantics(
+            label: _state.leadType(cable).label,
+            child: LeadSymbol(type: _state.leadType(cable)),
+          ),
+        Expanded(
+          child: Text(endpoint, style: draftingLettering(12, spacing: .2)),
+        ),
       ],
     );
   }

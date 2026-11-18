@@ -164,6 +164,15 @@ class _ComponentDrawing extends CustomPainter {
             canvas.drawLine(Offset(x, -5), Offset(x, 5), marking);
           }
         }
+      case SignalDeviceKind.relay:
+        final chevron = Path()
+          ..addPolygon(const [
+            Offset(-6, -6),
+            Offset(2, 0),
+            Offset(-6, 6),
+          ], false);
+        canvas.drawPath(chevron, marking);
+        canvas.drawPath(chevron.shift(const Offset(7, 0)), marking);
       case SignalDeviceKind.broadcaster:
         // A mast with waves radiating away from its tip.
         const tip = Offset(0, -3);

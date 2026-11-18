@@ -14,6 +14,7 @@ class GameSave {
     Map<String, SignalPoint>? positions,
     Set<String>? flipped,
     Map<String, int> losses = const {},
+    Map<SignalLink, LeadType> leadTypes = const {},
   }) {
     if (lesson is WiredLesson) {
       return GameSave._wired(
@@ -24,6 +25,7 @@ class GameSave {
           positions: positions,
           flipped: flipped,
           losses: losses,
+          leadTypes: leadTypes,
         ),
         List.unmodifiable(layout ?? const []),
       );
@@ -106,6 +108,7 @@ class GameSave {
                 'to': link.to,
                 'input': link.input,
                 'output': link.output,
+                if (signal!.leadTypes[link] case final type?) 'lead': type.name,
               },
           ],
         }
@@ -224,6 +227,7 @@ class GameSave {
     final rows = json['links'];
     if (rows is! List) throw const FormatException('Missing cables.');
     final links = <SignalLink>[];
+    final leadTypes = <SignalLink, LeadType>{};
     for (final row in rows) {
       if (row case {
         'from': final String from,
@@ -232,12 +236,22 @@ class GameSave {
         'output': final int output,
       }) {
         if (retired.contains(from) || retired.contains(to)) continue;
-        _appendLink(board, links, (
-          from: from,
-          to: to,
-          input: input,
-          output: output,
-        ), positions);
+        final link = (from: from, to: to, input: input, output: output);
+        final type = row.containsKey('lead')
+            ? LeadType.values
+                  .where((type) => type.name == row['lead'])
+                  .firstOrNull
+            : LeadType.patch;
+        if (type == null) throw const FormatException('Invalid lead type.');
+        _appendLink(
+          board,
+          links,
+          link,
+          positions,
+          type: type,
+          leadTypes: leadTypes,
+        );
+        if (type != LeadType.patch) leadTypes[link] = type;
       } else {
         throw const FormatException('Invalid cable.');
       }
@@ -248,6 +262,7 @@ class GameSave {
       positions: positions,
       flipped: flipped,
       losses: losses,
+      leadTypes: leadTypes,
     );
   }
 
@@ -255,12 +270,21 @@ class GameSave {
     SignalBoard board,
     List<SignalLink> links,
     SignalLink link,
-    Map<String, SignalPoint> positions,
-  ) {
+    Map<String, SignalPoint> positions, {
+    LeadType type = LeadType.patch,
+    Map<SignalLink, LeadType> leadTypes = const {},
+  }) {
     if (links.any(
           (other) => other.to == link.to && other.input == link.input,
         ) ||
-        board.linkIssue(links, link, positions: positions, checkReach: false) !=
+        board.linkIssue(
+              links,
+              link,
+              positions: positions,
+              checkReach: false,
+              type: type,
+              leadTypes: leadTypes,
+            ) !=
             null) {
       throw const FormatException('Invalid cable.');
     }

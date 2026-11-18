@@ -6,6 +6,7 @@ import 'package:dark_port/game_save.dart';
 import 'package:dark_port/main.dart';
 import 'package:dark_port/signal_board.dart';
 import 'package:dark_port/signal_board_state.dart';
+import 'package:dark_port/tutorial.dart';
 import 'package:dark_port/tutorial_progress.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -108,7 +109,7 @@ void main() {
         (EndlessLevel.blindCorner, const SignalPoint(2.5, 2.5), 35),
         (EndlessLevel.fadingSignal, const SignalPoint(2.5, 1.5), 40),
       ]) {
-        final board = level.lesson!.board;
+        final board = (level.lesson! as WiredLesson).board;
         final wins = <SignalBoardState>[];
         for (final node in board.placementNodes) {
           final positions = {
@@ -398,7 +399,7 @@ void main() {
       (await store.load())!.endlessBoards[antennaTestLesson.id]!.solved,
       isTrue,
     );
-    await tap(find.byKey(const ValueKey('lesson-advance')));
+    await tap(find.byTooltip('Back to puzzles'));
     expect(find.byTooltip('Antenna Test · Replay'), findsOneWidget);
     // Saves written before Solution Stars still contain the completed fixture.
     store.data!.remove('endlessResults');
@@ -450,7 +451,7 @@ Future<void> playNewEndlessBoards(WidgetTester tester, GameStore store) async {
 
   Finder part(String id) => find.byKey(ValueKey('signal-device-$id'));
   final boardSurface = find.byKey(const ValueKey('signal-playfield'));
-  final advance = find.byKey(const ValueKey('lesson-advance'));
+  final back = find.byTooltip('Back to puzzles');
   final puzzleStars = find.byKey(const ValueKey('puzzle-solution-stars'));
   final leadStock = find.byKey(const ValueKey('patch-lead-stock'));
   final trophy = find.byKey(
@@ -460,7 +461,8 @@ Future<void> playNewEndlessBoards(WidgetTester tester, GameStore store) async {
   void expectTitleSpacing(String status) {
     final titleBlock = find.byType(DraftingTitleBlock);
     final titleBounds = tester.getRect(titleBlock);
-    expect(titleBounds.top - tester.getRect(leadStock).bottom, closeTo(6, .01));
+    final inventory = find.byKey(const ValueKey('cable-inventory'));
+    expect(titleBounds.top - tester.getRect(inventory).bottom, closeTo(6, .01));
     final statusBounds = tester.getRect(
       find.descendant(
         of: titleBlock,
@@ -589,7 +591,7 @@ Future<void> playNewEndlessBoards(WidgetTester tester, GameStore store) async {
     (EndlessLevel.blindCorner, 'Blocked by concrete', '35 / ≥35 u'),
     (EndlessLevel.fadingSignal, 'Too weak', '40 / ≥40 u'),
   ]) {
-    final lesson = level.lesson!;
+    final lesson = level.lesson! as WiredLesson;
     expectStars(entry(level.number), [Icons.star_border]);
     await open(level.number);
     expectStars(puzzleStars, [Icons.star_border]);
@@ -620,7 +622,7 @@ Future<void> playNewEndlessBoards(WidgetTester tester, GameStore store) async {
       level.solutionIds.toSet(),
     );
     expectStars(puzzleStars, [Icons.star]);
-    await tap(advance);
+    await tap(back);
   }
 
   await openAchievementsFromPuzzles();
@@ -681,7 +683,7 @@ Future<void> playNewEndlessBoards(WidgetTester tester, GameStore store) async {
   expectStars(puzzleStars, cascadeEarned);
   expectTrophy(Icons.emoji_events_outlined);
   await checkNightLightsHint(puzzleStars, cascadeEarned);
-  await tap(advance);
+  await tap(back);
   expectStars(entry(night.number), cascadeEarned);
 
   await open(night.number);
@@ -702,7 +704,7 @@ Future<void> playNewEndlessBoards(WidgetTester tester, GameStore store) async {
   expect(result.stars, {'balanced', 'cascade'});
   expect(result.fourCableRecord, isTrue);
   expectStars(puzzleStars, bothEarned);
-  await tap(advance);
+  await tap(back);
   expectStars(entry(night.number), bothEarned);
   await openAchievementsFromPuzzles();
   expect(find.text('3 OF 3 EARNED'), findsOneWidget);

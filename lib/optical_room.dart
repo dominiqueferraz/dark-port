@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 
 import 'board_history.dart';
 import 'drafting_controls.dart';
@@ -21,6 +22,7 @@ class OpticalRoom extends StatefulWidget {
     required this.brief,
     required this.navigation,
     required this.onChange,
+    this.revealedParts = const {},
   });
 
   final OpticalLevel level;
@@ -28,6 +30,7 @@ class OpticalRoom extends StatefulWidget {
   final PuzzleBrief brief;
   final PuzzleNavigation navigation;
   final ValueChanged<List<Optic>> onChange;
+  final Set<GuidePart> revealedParts;
 
   @override
   State<OpticalRoom> createState() => _OpticalRoomState();
@@ -130,10 +133,10 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
   void _pick(OpticalDeckGeometry geometry, Offset pointer) {
     if (!_canEdit) return;
     final optic = _hit(geometry, pointer);
-    if (optic == null || optic.fixed) return;
+    if (optic == null || !_level.canMove(optic)) return;
     setState(() {
       _held = optic;
-      _dropSpot = _level.snapAt(optic.position);
+      _dropSpot = _level.snapAt(optic.position, id: optic.id);
       _grabOffset = pointer - geometry.project(optic.position);
       _validDrop = true;
       _message = null;
@@ -145,7 +148,9 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
     if (held == null) return;
     setState(() {
       final position = geometry.unproject(pointer - _grabOffset!);
-      final spot = position == null ? null : _level.snapAt(position);
+      final spot = position == null
+          ? null
+          : _level.snapAt(position, id: held.id);
       _dropSpot = spot;
       final move = spot == null ? null : held.at(spot.position);
       _validDrop = move != null && _level.canPlace(move, _layout);
@@ -199,7 +204,11 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
       playfield: _playfield(),
       readings: _partsList(),
       canLeave: idle,
-      onHelp: () => showPartGuide(context, wiredFirst: false),
+      onHelp: () => showPartGuide(
+        context,
+        puzzleParts: opticalGuideParts(_level),
+        revealedParts: widget.revealedParts,
+      ),
       solved: _opened,
       feedback: [?_status()],
     );
@@ -232,6 +241,9 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
                 dropSpot: _dropSpot,
                 validDrop: _validDrop,
                 opened: _opened,
+                awardBounds: widget.brief.awardBounds.shift(
+                  Offset(draftingGridMargins.left, draftingGridMargins.top),
+                ),
               ),
               for (final optic in _layout) _semanticOptic(geometry, optic),
             ],
@@ -241,19 +253,28 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
     },
   );
 
-  Widget _partsList() => DraftingPartsList(
-    rows: [
-      const DraftingPartRow(
-        number: '$laserPartNumber',
-        name: 'LASER SOURCE',
-        state: '100 U',
-        symbol: OpticalPartSymbol.source(),
-      ),
-      for (final (index, optic) in _layout.indexed) _opticRow(index, optic),
+  Widget _partsList() {
+    final receivers = [
       for (var index = 0; index < _level.receivers.length; index++)
         _receiverReading(index),
-    ],
-  );
+    ];
+    final showTargetsFirst = _level.receivers.any(
+      (sensor) => sensor.requiredPower != null,
+    );
+    return DraftingPartsList(
+      rows: [
+        if (showTargetsFirst) ...receivers,
+        const DraftingPartRow(
+          number: '$laserPartNumber',
+          name: 'LASER SOURCE',
+          state: '100 U',
+          symbol: OpticalPartSymbol.source(),
+        ),
+        for (final (index, optic) in _layout.indexed) _opticRow(index, optic),
+        if (!showTargetsFirst) ...receivers,
+      ],
+    );
+  }
 
   Widget _opticRow(int index, Optic optic) {
     final shown = optic.id == _held?.id ? _held! : optic;
@@ -278,10 +299,22 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
     final alarm = _level.alarms.contains(index);
     final mustBeDark = _level.dark.contains(index);
     final current = lightUnits(_trace.receivedPower(index) * 100);
+    final power = receiver.requiredPower;
+    final target = mustBeDark
+        ? '0'
+        : power == null
+        ? '>0'
+        : lightUnits(power);
+    final onTarget = _trace.meetsGoal(_level, index);
     return Semantics(
       key: ValueKey('optical-goal-$index'),
       container: true,
-      label: '${receiver.label}. Target ${mustBeDark ? 'dark' : 'lit'}.',
+      label:
+          '${receiver.label}. Target ${mustBeDark
+              ? 'dark'
+              : power == null
+              ? 'lit'
+              : '$target light units'}.',
       value: '$current light units, ${lit ? 'lit' : 'dark'}',
       excludeSemantics: true,
       child: DraftingPartRow(
@@ -291,9 +324,9 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
           if (alarm && !receiver.label.toLowerCase().contains('alarm'))
             '(ALARM)',
         ].join(' '),
-        state: '$current U / ${mustBeDark ? '0' : '>0'}',
+        state: '$current U / $target',
         symbol: OpticalPartSymbol.receiver(lit: lit, alarm: alarm),
-        tone: lit != mustBeDark
+        tone: onTarget
             ? (alarm ? PartTone.alarmLit : PartTone.lit)
             : alarm
             ? PartTone.warning
@@ -337,6 +370,16 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
 
   Widget _semanticOptic(OpticalDeckGeometry geometry, Optic optic) {
     final p = geometry.project(optic.position);
+    final moves = <CustomSemanticsAction, VoidCallback>{
+      if (_canEdit && _level.canMove(optic))
+        for (final spot in _level.mounts[optic.id] ?? const <GridSpot>[])
+          if (spot.position != optic.position &&
+              _level.canPlace(optic.at(spot.position), _layout))
+            CustomSemanticsAction(
+              label: 'Move to ${opticalZone(_level, spot.position)}',
+            ): () =>
+                setState(() => _commit(optic.at(spot.position))),
+    };
     return Positioned(
       left: p.dx - 22,
       top: p.dy - 22,
@@ -349,6 +392,7 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
         button: !optic.fixed,
         hint: optic.fixed ? null : 'Rotate',
         onTap: !optic.fixed && _canEdit ? () => _rotate(optic) : null,
+        customSemanticsActions: moves,
         child: const SizedBox.expand(),
       ),
     );

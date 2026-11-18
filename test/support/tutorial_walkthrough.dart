@@ -65,7 +65,7 @@ Future<void> playTutorial(
   expect(screen.width, greaterThan(screen.height));
   expect(find.text('New game').hitTestable(), findsOneWidget);
 
-  final details = find.byKey(const ValueKey('landscape-lesson-details'));
+  final details = find.byKey(const ValueKey('puzzle-objective'));
   void expectFits(Finder finder, Rect bounds) {
     final rect = tester.getRect(finder);
     expect(rect.left, greaterThanOrEqualTo(bounds.left - .01));
@@ -86,7 +86,11 @@ Future<void> playTutorial(
       readingsBounds.top,
       closeTo(viewportBounds.top + draftingGridMargins.top, .51),
     );
-    expect(tester.getRect(details).top - toolbarBounds.bottom, closeTo(6, .01));
+    final titleBlock = find.byType(DraftingTitleBlock);
+    expect(
+      tester.getRect(details).top - tester.getRect(titleBlock).bottom,
+      closeTo(6, .01),
+    );
     expect(
       toolbarBounds.top - tester.getRect(readings).bottom,
       closeTo(6, .01),
@@ -157,15 +161,24 @@ Future<void> playTutorial(
   }
 
   void expectAdvanceVisible(String label) {
-    expect(tester.widget<IconButton>(advance).tooltip, label);
+    expect(
+      find.descendant(of: advance, matching: find.text(label)),
+      findsOneWidget,
+    );
     expect(advance.hitTestable(), findsOneWidget);
     expectFits(advance, screen);
-    expectFits(advance, tester.getRect(toolbarGroup));
+    expect(
+      tester.getRect(advance).top,
+      greaterThanOrEqualTo(tester.getRect(details).bottom),
+    );
+    expect(find.byTooltip('Hint').hitTestable(), findsOneWidget);
     expectPanelAlignment();
   }
 
   await capture('qa-title');
   await press('New game');
+  await store.load();
+  await tester.pumpAndSettle();
   expect(find.text('TUTORIAL'), findsOneWidget);
   await capture('qa-tutorial-start');
   await open(firstReflection);
@@ -174,8 +187,13 @@ Future<void> playTutorial(
   expect(find.text(firstReflection.goal).hitTestable(), findsOneWidget);
   await pressIcon('Close hint');
   await pressIcon('Parts guide');
-  expect(find.text('Beam splitter'), findsOneWidget);
-  expect(find.text('Alarm blocker'), findsOneWidget);
+  expect(find.text('Mirror'), findsOneWidget);
+  expect(find.text('Beam splitter'), findsNothing);
+  expect(find.text('Wired'), findsNothing);
+  await press('Controls');
+  expect(find.text('Placement'), findsOneWidget);
+  expect(find.text('Rotation'), findsOneWidget);
+  expect(find.text('Wiring'), findsNothing);
   await press('Close');
 
   final deck = find.byKey(const ValueKey('optical-deck'));
@@ -392,7 +410,7 @@ Future<void> playTutorial(
   await wire('fourWay', 'west', port: 3);
   expect((await currentSave()).solved, isTrue);
   expectGoal('east', '75/75', 'Online');
-  await tap(advance);
+  await back();
 
   await open(benchPad);
   active = benchPad;

@@ -101,7 +101,7 @@ void main() {
       await tester.pump();
       expect(board().trace.solves(reflectionLesson), isTrue);
       expect(board().opened, isFalse);
-      expect(find.byTooltip('Next lesson'), findsNothing);
+      expect(find.text('Next lesson'), findsNothing);
       expect(find.byKey(const ValueKey('lesson-complete')), findsNothing);
       await drag.cancel();
       await tester.pump();
@@ -164,8 +164,8 @@ void main() {
       await move('S1', const FloorPoint(-3.15, -.27));
       expect(board().trace.solves(splittingLesson), isTrue);
       expect(find.byKey(const ValueKey('lesson-complete')), findsOneWidget);
-      await tester.ensureVisible(find.byTooltip('Next lesson'));
-      await tester.tap(find.byTooltip('Next lesson'));
+      await tester.ensureVisible(find.text('Next lesson'));
+      await tester.tap(find.text('Next lesson'));
       await tester.pumpAndSettle();
 
       expect(
@@ -173,7 +173,7 @@ void main() {
         opticalInterlock.title,
       );
       expect(board().trace.lit, {0});
-      expect(find.byTooltip('Next lesson'), findsNothing);
+      expect(find.text('Next lesson'), findsNothing);
       const alarmLine = FloorPoint(-3.15, .78);
       final mirrorStart = at(optic('M2').position);
       final alarmTarget = at(alarmLine);
@@ -192,7 +192,7 @@ void main() {
       await move('M2', alarmLine);
       expect(board().trace.lit, isEmpty);
       expect(find.textContaining('Alarm line interrupted.'), findsOneWidget);
-      expect(find.byTooltip('Next lesson'), findsNothing);
+      expect(find.text('Next lesson'), findsNothing);
       await rotate('M2');
       expect(optic('M2').turned, isTrue);
       await tester.tap(find.byTooltip('Undo'));
@@ -207,8 +207,8 @@ void main() {
       expect(board().trace.lit, {0, 1, 2});
       expect(board().opened, isTrue);
       expect(find.byKey(const ValueKey('lesson-complete')), findsOneWidget);
-      await tester.ensureVisible(find.byTooltip('Next lesson'));
-      await tester.tap(find.byTooltip('Next lesson'));
+      await tester.ensureVisible(find.text('Next lesson'));
+      await tester.tap(find.text('Next lesson'));
       await tester.pumpAndSettle();
       expect(
         tester.widget<PuzzleConsole>(find.byType(PuzzleConsole)).brief.title,

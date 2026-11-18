@@ -25,6 +25,8 @@ An open board has no cable-routing obstacles. When a board has route constraints
 
 Draw each lead leaving its output and entering its input in the socket’s facing direction. Round the bends and leave clearance around neighboring pins, including empty sockets. Keep any cable crossing and its overpass gap clear of the pins. On open boards, the drawn bends do not affect the port-to-port distance check.
 
+The app uses a patch lead on an ordinary route and selects a specialty lead when the route requires one. A corridor preview shows the chosen lead symbol and length before installation. Inventory symbols show available and installed stock. The Parts guide identifies each symbol and explains its use. The evaluator still checks the type of every installed lead, including after a move.
+
 E01–E03, E05, and E08 issue one patch lead each. E04, E06, and E07 list their stock in the level records. E18 issues three patch leads, one shielded lead, and one trunk lead. Its two ordinary feed legs use patch leads. E09–E17 and E19–E20 use light and radio without player-installed cables.
 
 ## Solution Stars
@@ -56,10 +58,15 @@ Remove each candidate spare from the fixture and rerun the replays and failure c
 | E03 Blind Corner | 3 devices, 1 concrete wall, 1 patch lead | One target measures the two equal-distance hops. The wall rejects one of them. |
 | E04 Night Lights | 7 devices, 5 patch leads | One feed and three loads are common to both routes. The three-way serves the balanced route and four-cable record. Both two-ways and the fifth lead serve the cascade. |
 | E05 Fading Signal | 3 devices, 1 patch lead | One feed, broadcaster and antenna show both sides of the strength threshold by changing the mount. |
+| E06 Relay Shelf | 4 devices, 1 interference zone, 1 patch and 1 shielded lead | The relay makes two short legs possible. The interference zone requires a shielded lead on the second leg. |
+| E07 Two Masts | 6 devices, 1 concrete wall with a trunk feedthrough, 2 patch and 1 trunk lead | The splitter gives each mast 60 u. The wall makes both masts necessary, and the distant mast needs the trunk feedthrough. |
+| E08 Quiet Sector | 5 devices, 1 concrete wall, 1 patch lead | One mast must reach both target antennas. The protected antenna distinguishes screening from simple coverage. |
+| E09 Corner Mirror | 1 laser, 1 mirror, 1 sensor and 1 baffle | The mirror supplies the required turn. The baffle shows a blocked beam from the other mount. |
+| E10 Split Around the Baffle | 1 laser, 1 splitter, 1 mirror, 2 sensors and 1 baffle | The splitter powers two branches. The mirror turns the far branch and the baffle stops the lower turn. |
 
 ### Group path
 
-The Endless group path lists **Signal Routing** as group **1**. Selecting it opens a separate path with all 20 boards numbered **1.1** through **1.20**. E02 **Edge of Coverage** is an optional branch off E01 **Antenna Test** because it reuses the two-mark fixture and adds a channel decoy. The main line goes from E01 to E03. E05 stays on the main line because it introduces attenuation as a solve constraint. E04 and E18 list different routes through their respective boards, so each has one entry on the line. E01–E05 are playable and verified against the app evaluator.
+The Endless group path lists **Signal Routing** as group **1**. Selecting it opens a separate path with boards numbered **1.1** through **1.20**. E02 **Edge of Coverage** is an optional branch off E01 **Antenna Test** because it reuses the two-mark fixture and adds a channel decoy. The main line goes from E01 to E03. E05 stays on the main line because it introduces attenuation as a solve constraint. E04 and E18 list different routes through their respective boards, so each has one entry on the line. E01–E10 are playable and verified against the app evaluators.
 
 ### Coverage, cable reach, and fan-out
 
@@ -70,16 +77,16 @@ The Endless group path lists **Signal Routing** as group **1**. Selecting it ope
 | E03 **Blind Corner** | A concrete wall separates two in-range marks from a 35 u target. Both marks have valid patch feeds. The exposed mark sees the target around the edge. | Verify the same-distance blocked mark hits concrete. Remove the wall in a test fixture and verify both marks can win. | **1**, Appendix A |
 | E04 **Night Lights** | A fixed 300 u source, one three-way, two two-ways, and three loads each accepting 75–150 u. Supply five patch leads. Valid routes are balanced three-way `100/100/100` and cascaded `150/75/75`. The balanced route earns the four-cable record. | Check the inclusive 75 and 150 bounds, that an unused output still takes its share, and that routing 100 u through a two-way yields a failing 50 u branch. | **2**, Appendix A |
 | E05 **Fading Signal** | One 60 u broadcaster, two powered marks, reach 6, and a 40 u target. Marks are four and five steps from the same target. | Both paths are clear and inside reach. Read 40 u at four steps and 35 u at five. | **1**, Appendix A |
-| E06 **Relay Shelf** | The mount that gives 40 u is five cable units from a source rated for four. Put the relay on the shelf where the first leg needs three units and the second needs four. Issue one patch and one shielded lead. The second leg crosses a marked interference corridor. | Direct cable fails on length. One alternate relay shelf makes a leg five units. A patch lead on the four-unit corridor fails on interference. Lose the incoming feed and the relay goes quiet. | **1**, Appendix A |
-| E07 **Two Masts** | Split channel 12 at 120 u into two 60 u mast feeds. A concrete partition gives each mast a different receiver. Fix one mast at distance 5 from a 35 u target. The other must use its distance-4 mark to meet a 40 u target. Route the fixed mast along an aligned six-unit trunk run through its feedthrough. Issue one trunk and two patch leads. | Wrong mark delivers 35 u at the 40 u target. Closing the trunk feedthrough cuts off only that mast. One mast alone cannot cover both receivers. | **1**, layout pending |
-| E08 **Quiet Sector** | One movable mast and three powered marks. Two required receivers need at least 35 u. A same-channel protected receiver must be quiet. The close mark lights all three. The screened mark around the wall keeps both targets at 35 u or more. A third mark loses one target around the other edge. | Check the protected receiver's positive reading from the close mark. Check one target is screened on the third mark. Verify both goal readings separately on the winning mark. | **1**, layout pending |
+| E06 **Relay Shelf** | The mount that gives 40 u is five cable units from a source rated for four. Put the relay on the shelf where the first leg needs three units and the second needs four. Issue one patch and one shielded lead. The second leg crosses a marked interference corridor. | Direct cable fails on length. One alternate relay shelf makes a leg five units. A patch lead on the four-unit corridor fails on interference. Lose the incoming feed and the relay goes quiet. | **1**, app proof below |
+| E07 **Two Masts** | Split channel 12 at 120 u into two 60 u mast feeds. A concrete partition gives each mast a different receiver. Fix one mast at distance 5 from a 35 u target. The other must use its distance-4 mark to meet a 40 u target. Route the fixed mast along an aligned six-unit trunk run through its feedthrough. Issue one trunk and two patch leads. | Wrong mark delivers 35 u at the 40 u target. Closing the trunk feedthrough cuts off only that mast. One mast alone cannot cover both receivers. | **1**, app proof below |
+| E08 **Quiet Sector** | One movable mast and three powered marks. Two required receivers need at least 35 u. A same-channel protected receiver must be quiet. The close mark lights all three. The screened mark around the wall keeps both targets at 35 u or more. A third mark loses one target around the other edge. | Check the protected receiver's positive reading from the close mark. Check one target is screened on the third mark. Verify both goal readings separately on the winning mark. | **1**, app proof below |
 
 ### Mirror and optical splitter fixtures
 
 | ID and level | Fixture, goal, and intended route | Failure checks | Target |
 | --- | --- | --- | --- |
-| E09 **Corner Mirror** | One 100 u laser and a rotatable mirror on two legal mounts. The mounts both intercept the ray. Only one lines up with the sensor's accepted approach on an unobstructed lane. | Wrong diagonal turns away. Wrong mount hits the baffle or misses the accepted sensor approach. Removing the baffle leaves the direction check active. | **1**, layout pending |
-| E10 **Split Around the Baffle** | One laser, rotatable splitter, and rotatable mirror on two mounts. The straight exit reaches the local sensor at 50 u. The turned exit must use the clear lane and the mirror to reach the second sensor at 50 u. | With no split, only one target can receive light. Try every non-winning diagonal and both mounts. A route that gets 50 u into the back of either sensor fails. | **1**, layout pending |
+| E09 **Corner Mirror** | One 100 u laser and a rotatable mirror on two legal mounts. The mounts both intercept the ray. Only one lines up with the sensor's accepted approach on an unobstructed lane. | Wrong diagonal turns away. Wrong mount hits the baffle or misses the accepted sensor approach. Removing the baffle leaves the direction check active. | **1**, app proof below |
+| E10 **Split Around the Baffle** | One laser, a splitter that rotates on its mount, and a rotatable mirror on two mounts. The straight exit reaches the local sensor at 50 u. The turned exit must use the clear lane and the mirror to reach the second sensor at 50 u. | With no split, only one target can receive light. Try every non-winning diagonal and both mounts. A route that gets 50 u into the back of either sensor fails. | **1**, app proof below |
 | E11 **Both Faces** | Two opposing 100 u rays, one shared mirror with three mounts and two diagonals, and two 100 u sensors on opposite exits. Include a decoy mount that can satisfy one sensor. | Rotate on the winning mount and confirm both turn directions swap. Remove either incoming ray and confirm only its goal fails. | **1**, layout pending |
 | E12 **Two Branches, Two Bends** | One rotatable splitter and two mirrors with two mounts each. Route both 50 u branches around opposite ends of a baffle. The two sensors have different accepted approaches. | Replace either mirror with empty space. Try placing both mirrors on the same branch. Check that exchanging identical mirror instances leaves one signature when the final geometry is identical. | **1**, layout pending |
 
@@ -139,6 +146,26 @@ Night Lights uses the app’s standard splitter sockets and five patch leads. Ou
 - **Cascade.** Wire the feed to Two-way A. Wire A’s output 0 to Two-way B and output 1 to Light 1. Wire B’s outputs 0 and 1 to Lights 3 and 2 respectively.
 
 The verified failures include unplugged feeds, out-of-range and wrong-channel receivers on E02, an in-range radio path blocked by concrete on E03, a sixth cable and a 50 u branch on E04, and a clear in-range 35 u hop on E05. Removing the E03 wall gives two winning mounts.
+
+## App fixture proofs · E06–E10
+
+The [fixture source](lib/endless_boards.dart) for revision 1 has SHA-256 `aed0de27daf29233ea21066483d5b0edc10367615f2c5400f59440e1a1a7b178`. The [wired evaluator](lib/signal_board.dart) has SHA-256 `ea05cc34dee67dbf0ef1df7edf29ddfc4effa9f5af8db1c80a821a5d013b96de`. The [optical evaluator](lib/optical_bay.dart) has SHA-256 `3fe7d92eaa4b422486b08d81016539140baadb23aade9605dfcc8fce3b693f85`.
+
+The [exhaustive tests](test/endless_routing_test.dart) enumerate legal placements and every available lead type and destination from each output, including leaving the output open. They check one cable per socket, stock and corridor legality. A move can leave a formerly legal cable attached and unusable. Such a cable delivers zero and occupies stock, so removing it preserves the active route and cannot introduce a new winning signature on these fixtures. The optical search tries each legal mount and both diagonals per optic. The walkthrough also plays, saves and replays the fixtures through the game controls.
+
+| Level and revision | Examined | Raw wins | Stable solution ID | Winning readings |
+| --- | ---: | ---: | --- | --- |
+| E06 r1 | 23 | 1 | `shielded-relay` | Service 40 u, relay and mast feeds 60 u each |
+| E07 r1 | 16 | 1 | `trunk-fed-masts` | Local 40 u, Remote 35 u |
+| E08 r1 | 6 | 1 | `screened-antenna` | North 35 u, West 50 u, protected 0 u |
+| E09 r1 | 4 | 1 | `clear-turn` | Sensor 100 u |
+| E10 r1 | 8 | 1 | `two-halves` | Local and Far 50 u each |
+
+- **E06.** With y increasing down, the Feed output is at `(1, .75)`. Mount the relay at `(3, 2.12)` and the broadcaster at `(6.37, .75)`. The patch path bends via `(1.2, .75)` and `(1.2, 2.12)` into `(2.63, 2.12)` for 3 units. The shielded path leaves `(3.37, 2.12)`, bends via `(3.6, 2.12)` and `(3.6, .75)`, and reaches `(6, .75)` in 4 units. The interference zone spans x=4–4.75 and y=.4–1.1. The direct leg to the winning mount takes 5 units. The alternate relay shelf at `(2, 2.12)` also needs a 5-unit second leg. The parked relay starts at `(1, 3.5)` with no corridor. The other mast mark at `(5.37, .75)` yields 35 u.
+- **E07.** Patch the Feed to the Two-way splitter. Mount Local at `(3.5, 1.5)` and patch it from splitter output 1. Connect splitter output 0 to Remote with the trunk lead. The run goes from `(2.37, 2.5)` to `(8.37, 2.5)` with a trunk feedthrough at `(5.5, 2.5)`. The wall spans y=0–5. The upper Local mount at `(3.5, .5)` delivers 35 u. Closing the feedthrough silences Remote while Local still receives 40 u. A bent patch corridor rejects the trunk lead.
+- **E08.** Patch the mast and move it to `(1.5, 1.5)`. The wall at x=5 spans y=1.4–3.1. The close mark at `(1.5, .5)` leaks 35 u to the protected antenna. The third mark at `(4.5, 2.5)` loses North behind the wall. A 1 u leak on channel 12 also fails the protection rule. Channel 9 is outside the monitored channel.
+- **E09.** With y increasing north, move the mirror from `(-2.625, -1.845)` to `(2.625, -1.845)` with the diagonal that turns eastbound light north. The sensor at `(2.625, 3.177)` accepts northbound light. The initial mount sends the northbound turn into the baffle. The opposite diagonal turns south.
+- **E10.** Rotate the splitter at `(-2.625, -1.845)` to send one half north. Move the mirror to `(-2.625, 1.305)` and turn the branch east. The lower mirror mount at y=.255 sends the branch into the baffle. Reversing the approach of either sensor in the verifier gives 0 u at that sensor while the other still receives 50 u.
 
 ## Appendix A · Exhaustive reference fixtures
 

@@ -43,16 +43,14 @@ class PuzzleNavigation {
   const PuzzleNavigation({
     required this.backLabel,
     required this.onBack,
-    required this.advanceLabel,
-    required this.advanceIcon,
-    required this.onAdvance,
+    this.backIcon = Icons.arrow_back,
+    this.advance,
   });
 
   final String backLabel;
   final VoidCallback onBack;
-  final String advanceLabel;
-  final IconData advanceIcon;
-  final VoidCallback onAdvance;
+  final IconData backIcon;
+  final ({String label, IconData icon, VoidCallback onPressed})? advance;
 }
 
 /// Shared layout for a playable board and its readings, controls and status.
@@ -124,7 +122,15 @@ class PuzzleConsole extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            _details(includeReadings: true),
+            ?_objective(),
+            _ReadingsFrame(child: readings),
+            ...feedback,
+            if (brief.sheet != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: _titleBlock(),
+              ),
+            if (solved && navigation.advance != null) _advanceButton(context),
           ],
         ),
       ),
@@ -132,7 +138,6 @@ class PuzzleConsole extends StatelessWidget {
   );
 
   Widget _wideLayout(BuildContext context) {
-    final pinTitle = inventory != null && brief.sheet != null;
     return DraftingSheet(
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -145,69 +150,70 @@ class PuzzleConsole extends StatelessWidget {
             ),
           ),
           const SizedBox(width: DraftingSheetFrame.panelGap),
-          Expanded(
-            flex: 3,
-            child: Padding(
-              padding: EdgeInsets.only(top: draftingGridMargins.top),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Flexible(
-                    flex: 5,
-                    child: _PanelScroll(
-                      viewportKey: const ValueKey('landscape-lesson-readings'),
-                      framed: true,
-                      child: readings,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  _toolbar(context),
-                  ?inventory,
-                  const SizedBox(height: 6),
-                  if (pinTitle) ...[_titleBlock(), const SizedBox(height: 6)],
-                  Flexible(
-                    flex: pinTitle ? 2 : 3,
-                    child: _PanelScroll(
-                      viewportKey: const ValueKey('landscape-lesson-details'),
-                      child: _details(includeTitle: false),
-                    ),
-                  ),
-                  if (!pinTitle && brief.sheet != null) ...[
-                    const SizedBox(height: 8),
-                    _titleBlock(),
-                  ],
-                ],
-              ),
-            ),
-          ),
+          Expanded(flex: 3, child: _wideControls(context)),
         ],
       ),
     );
   }
 
-  Widget _details({bool includeReadings = false, bool includeTitle = true}) =>
-      Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (brief.objective case final objective? when !solved)
-            Padding(
-              padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
-              child: Text(objective, style: draftingLettering(12, spacing: .3)),
+  Widget _wideControls(BuildContext context) => Padding(
+    padding: EdgeInsets.only(top: draftingGridMargins.top),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Flexible(
+          flex: 5,
+          child: _PanelScroll(
+            viewportKey: const ValueKey('landscape-lesson-readings'),
+            framed: true,
+            child: readings,
+          ),
+        ),
+        const SizedBox(height: 6),
+        _toolbar(context),
+        ?inventory,
+        const SizedBox(height: 6),
+        if (brief.sheet != null) ...[_titleBlock(), const SizedBox(height: 6)],
+        if (_objective() case final objective?)
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 72),
+            child: SingleChildScrollView(child: objective),
+          ),
+        if (feedback.isNotEmpty)
+          Flexible(
+            flex: 2,
+            child: _PanelScroll(
+              viewportKey: const ValueKey('landscape-lesson-details'),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: feedback,
+              ),
             ),
-          if (includeReadings) _ReadingsFrame(child: readings),
-          ...feedback,
-          if (includeTitle && brief.sheet != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: _titleBlock(),
-            ),
-        ],
-      );
+          ),
+        if (solved && navigation.advance != null) _advanceButton(context),
+      ],
+    ),
+  );
 
-  Widget _titleBlock() => DraftingTitleBlock(
-    title: brief.title,
-    sheet: brief.sheet!,
-    approved: solved,
+  Widget? _objective() {
+    final objective = brief.objective ?? brief.goal;
+    if (objective == null) return null;
+    return Padding(
+      key: const ValueKey('puzzle-objective'),
+      padding: const EdgeInsets.fromLTRB(4, 0, 4, 6),
+      child: Text(objective, style: draftingLettering(12, spacing: .3)),
+    );
+  }
+
+  Widget _titleBlock() => Semantics(
+    key: solved ? const ValueKey('lesson-complete') : null,
+    liveRegion: solved,
+    label: solved ? 'Complete' : null,
+    child: DraftingTitleBlock(
+      title: brief.title,
+      sheet: brief.sheet!,
+      approved: solved,
+    ),
   );
 
   Widget _blueprint(BuildContext context) {
@@ -337,13 +343,21 @@ class PuzzleConsole extends StatelessWidget {
             child: consoleButton(
               tooltip: navigation.backLabel,
               onPressed: canLeave ? navigation.onBack : null,
-              icon: const Icon(Icons.arrow_back),
+              icon: Icon(navigation.backIcon),
             ),
           ),
           const DraftingCellDivider(),
           Expanded(flex: 3, child: tools),
           const DraftingCellDivider(),
-          Expanded(child: _finishButton(context)),
+          Expanded(
+            child: consoleButton(
+              tooltip: 'Hint',
+              onPressed: brief.hasHint && canLeave
+                  ? () => _showHint(context)
+                  : null,
+              icon: const Icon(Icons.lightbulb_outline),
+            ),
+          ),
           if (onHelp case final help?) ...[
             const DraftingCellDivider(),
             Expanded(
@@ -359,26 +373,20 @@ class PuzzleConsole extends StatelessWidget {
     ),
   );
 
-  Widget _finishButton(BuildContext context) => solved
-      ? Semantics(
-          key: const ValueKey('lesson-complete'),
-          container: true,
-          explicitChildNodes: true,
-          liveRegion: true,
-          label: 'Complete',
-          child: consoleButton(
-            key: const ValueKey('lesson-advance'),
-            tooltip: navigation.advanceLabel,
-            onPressed: navigation.onAdvance,
-            icon: Icon(navigation.advanceIcon),
-            emphasized: true,
-          ),
-        )
-      : consoleButton(
-          tooltip: 'Hint',
-          onPressed: brief.hasHint ? () => _showHint(context) : null,
-          icon: const Icon(Icons.lightbulb_outline),
-        );
+  Widget _advanceButton(BuildContext context) {
+    final action = navigation.advance!;
+    return OutlinedButton.icon(
+      key: const ValueKey('lesson-advance'),
+      onPressed: canLeave ? action.onPressed : null,
+      icon: Icon(action.icon, size: 18),
+      label: Text(action.label, style: draftingLettering(12, spacing: .3)),
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(0, 40),
+        shape: const RoundedRectangleBorder(),
+        side: BorderSide(color: context.sheet.ink, width: .9),
+      ),
+    );
+  }
 
   void _showHint(BuildContext context) {
     final sheet = context.sheet;

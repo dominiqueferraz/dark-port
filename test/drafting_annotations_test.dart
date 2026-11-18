@@ -60,4 +60,26 @@ void main() {
     expect(annotations.hasRoom(const Offset(3, 60), 5), isFalse);
     expect(annotations.hasRoom(const Offset(70, 60), 5), isTrue);
   });
+
+  test('the whole label clears walls, diagonal traces and other notes', () {
+    final annotations = DraftingAnnotations(
+      bounds: bounds,
+      obstacles: const [Rect.fromLTWH(60, 0, 5, 120)],
+      traces: const [(Offset(70, 20), Offset(104, 54))],
+    );
+    const size = Size(36, 12);
+    final label = annotations.placeLabel(size, const [
+      Offset(78, 72), // Its left edge sits on the wall.
+      Offset(99, 40), // A trace clips the upper-left side.
+      Offset(118, 72),
+    ]);
+    expect(label?.center, const Offset(118, 72));
+    expect(
+      annotations.placeLabel(size, const [
+        Offset(124, 78),
+        Offset(118, 97),
+      ])?.center,
+      const Offset(118, 97),
+    );
+  });
 }

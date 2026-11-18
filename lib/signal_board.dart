@@ -6,6 +6,7 @@ enum SignalDeviceKind {
   transmitter,
   splitter,
   attenuator,
+  relay,
   receiver,
   broadcaster,
   antenna,
@@ -51,6 +52,8 @@ class SignalDevice {
     this.initialLoss,
     this.fixed = false,
     this.alternateTint = false,
+    this.mounts,
+    this.mustBeQuiet = false,
   });
 
   final String id;
@@ -69,14 +72,19 @@ class SignalDevice {
   final int? initialLoss;
   final bool fixed;
   final bool alternateTint;
+  final List<PlacementNode>? mounts;
+  final bool mustBeQuiet;
   int get range => cableRange ?? splitter?.range ?? 3;
 
-  bool get canFlip => !fixed && kind != SignalDeviceKind.broadcaster;
+  bool get canFlip =>
+      !fixed && mounts == null && kind != SignalDeviceKind.broadcaster;
   bool get hasInput =>
       kind != SignalDeviceKind.transmitter && kind != SignalDeviceKind.antenna;
   int get inputs => !hasInput ? 0 : (dualInput ? 2 : 1);
   int get outputs => switch (kind) {
-    SignalDeviceKind.transmitter || SignalDeviceKind.attenuator => 1,
+    SignalDeviceKind.transmitter ||
+    SignalDeviceKind.attenuator ||
+    SignalDeviceKind.relay => 1,
     SignalDeviceKind.splitter => splitter!.outputs,
     SignalDeviceKind.receiver ||
     SignalDeviceKind.antenna ||
@@ -122,6 +130,10 @@ enum LinkIssue {
   direction('Connect an output to an input.'),
   range('That input is out of range.'),
   stock('No patch leads left. Disconnect a cable to free one.'),
+  corridor('No cable corridor joins these sockets.'),
+  interference('Shielded lead required.'),
+  trunk('A trunk lead needs a straight, marked trunk run.'),
+  feedthrough('The wall needs a matching feedthrough.'),
   occupied('That output is wired. Choose a free output.'),
   inputOccupied('That alarm input is wired. Use the other input.'),
   cycle('That cable would create a loop.');
@@ -129,6 +141,34 @@ enum LinkIssue {
   const LinkIssue(this.message);
 
   final String message;
+}
+
+enum LeadType {
+  patch('Patch lead'),
+  shielded('Shielded lead', 4),
+  trunk('Trunk lead', 6);
+
+  const LeadType(this.label, [this.cap]);
+
+  final String label;
+  final int? cap;
+}
+
+/// A single authored path between two physical jacks, including both ends.
+class CableCorridor {
+  const CableCorridor(this.points, {this.trunk = false});
+
+  final List<SignalPoint> points;
+  final bool trunk;
+
+  double get length {
+    var total = 0.0;
+    for (var i = 1; i < points.length; i++) {
+      final delta = points[i] - points[i - 1];
+      total += delta.x.abs() + delta.y.abs();
+    }
+    return total;
+  }
 }
 
 /// A vertical concrete barrier in board coordinates, with y increasing down.
@@ -171,7 +211,12 @@ class SignalBoard {
     this.initialLinks = const [],
     this.initialFlipped = const {},
     this.patchLeadStock,
+    this.shieldedLeadStock = 0,
+    this.trunkLeadStock = 0,
     this.radioWalls = const [],
+    this.cableCorridors,
+    this.interference,
+    this.feedthroughs = const {},
   });
 
   final List<SignalDevice> devices;
@@ -183,7 +228,23 @@ class SignalBoard {
   final List<SignalLink> initialLinks;
   final Set<String> initialFlipped;
   final int? patchLeadStock;
+  final int shieldedLeadStock;
+  final int trunkLeadStock;
   final List<RadioWall> radioWalls;
+  final List<CableCorridor>? cableCorridors;
+  final math.Rectangle<double>? interference;
+  final Map<SignalPoint, Set<LeadType>> feedthroughs;
+
+  int? leadStock(LeadType type) => switch (type) {
+    LeadType.patch => patchLeadStock,
+    LeadType.shielded => shieldedLeadStock,
+    LeadType.trunk => trunkLeadStock,
+  };
+
+  int leadReach(String from, LeadType type) {
+    final reach = device(from)!.range;
+    return math.min(reach, type.cap ?? reach);
+  }
 
   static const partSize = .88;
   static const edgeInset = .5;
@@ -221,29 +282,36 @@ class SignalBoard {
   SignalDevice? device(String id) =>
       devices.where((device) => device.id == id).firstOrNull;
 
-  PlacementNode? snapAt(SignalPoint point) =>
+  PlacementNode? snapAt(SignalPoint point, {String? id}) =>
       math.Rectangle<double>(0, 0, size, height).containsPoint(point)
-      ? nearestPlacementNode(point, placementNodes)
+      ? nearestPlacementNode(point, mountsFor(id))
       : null;
+
+  List<PlacementNode> mountsFor(String? id) =>
+      device(id ?? '')?.mounts ?? placementNodes;
 
   bool canMove(
     String id,
     SignalPoint point,
     Map<String, SignalPoint> positions,
-  ) =>
-      device(id)?.fixed == false &&
-      (device(id)?.kind != SignalDeviceKind.broadcaster ||
-          placementNodes.any((node) => node.position == point)) &&
-      point.x >= edgeInset &&
-      point.x <= size - edgeInset &&
-      point.y >= edgeInset &&
-      point.y <= height - edgeInset &&
-      positions.entries.every(
-        (entry) =>
-            entry.key == id ||
-            (entry.value.x - point.x).abs() >= partSize ||
-            (entry.value.y - point.y).abs() >= partSize,
-      );
+  ) {
+    final part = device(id);
+    if (part == null || part.fixed) return false;
+    final mounts =
+        part.mounts ??
+        (part.kind == SignalDeviceKind.broadcaster ? placementNodes : null);
+    return (mounts == null || mounts.any((node) => node.position == point)) &&
+        point.x >= edgeInset &&
+        point.x <= size - edgeInset &&
+        point.y >= edgeInset &&
+        point.y <= height - edgeInset &&
+        positions.entries.every(
+          (entry) =>
+              entry.key == id ||
+              (entry.value.x - point.x).abs() >= partSize ||
+              (entry.value.y - point.y).abs() >= partSize,
+        );
+  }
 
   ({SignalPoint from, SignalPoint to}) linkPorts(
     SignalLink link,
@@ -263,6 +331,8 @@ class SignalBoard {
     Map<String, SignalPoint> positions, {
     Set<String> flipped = const {},
   }) {
+    final route = corridorFor(link, positions, flipped: flipped);
+    if (route != null) return route.length;
     final ports = linkPorts(link, positions, flipped: flipped);
     final offset = ports.to - ports.from;
     return offset.x.abs() + offset.y.abs();
@@ -276,12 +346,88 @@ class SignalBoard {
       distance(link, positions, flipped: flipped) <=
       device(link.from)!.range + 1e-9;
 
+  CableCorridor? corridorFor(
+    SignalLink link,
+    Map<String, SignalPoint> positions, {
+    Set<String> flipped = const {},
+  }) {
+    final corridors = cableCorridors;
+    if (corridors == null) return null;
+    final ports = linkPorts(link, positions, flipped: flipped);
+    return corridors
+        .where(
+          (route) =>
+              _samePoint(route.points.first, ports.from) &&
+              _samePoint(route.points.last, ports.to),
+        )
+        .firstOrNull;
+  }
+
+  static bool _samePoint(SignalPoint a, SignalPoint b) =>
+      a.squaredDistanceTo(b) < 1e-16;
+
+  LinkIssue? cableIssue(
+    SignalLink link,
+    Map<String, SignalPoint> positions, {
+    Set<String> flipped = const {},
+    LeadType type = LeadType.patch,
+  }) {
+    final route = corridorFor(link, positions, flipped: flipped);
+    if (cableCorridors != null && route == null) return LinkIssue.corridor;
+    final length = route?.length ?? distance(link, positions, flipped: flipped);
+    if (length > leadReach(link.from, type) + 1e-9) return LinkIssue.range;
+    if (type == LeadType.trunk &&
+        (route == null ||
+            !route.trunk ||
+            route.points.length != 2 ||
+            (route.points.first.x != route.points.last.x &&
+                route.points.first.y != route.points.last.y))) {
+      return LinkIssue.trunk;
+    }
+    if (route == null) return null;
+    for (var i = 1; i < route.points.length; i++) {
+      final a = route.points[i - 1];
+      final b = route.points[i];
+      for (final wall in radioWalls) {
+        final intercept = wall._intercept(a, b);
+        if (intercept == null) continue;
+        final hit = a + (b - a) * intercept;
+        if (!feedthroughs.entries.any(
+          (entry) => _samePoint(hit, entry.key) && entry.value.contains(type),
+        )) {
+          return LinkIssue.feedthrough;
+        }
+      }
+      if (interference case final zone?
+          when type != LeadType.shielded && _crossesZone(a, b, zone)) {
+        return LinkIssue.interference;
+      }
+    }
+    return null;
+  }
+
+  static bool _crossesZone(
+    SignalPoint a,
+    SignalPoint b,
+    math.Rectangle<double> zone,
+  ) => a.y == b.y
+      ? a.y >= zone.top &&
+            a.y <= zone.bottom &&
+            math.min(a.x, b.x) < zone.right &&
+            math.max(a.x, b.x) > zone.left
+      : a.x >= zone.left &&
+            a.x <= zone.right &&
+            math.min(a.y, b.y) < zone.bottom &&
+            math.max(a.y, b.y) > zone.top;
+
   LinkIssue? linkIssue(
     List<SignalLink> links,
     SignalLink proposed, {
     required Map<String, SignalPoint> positions,
     Set<String> flipped = const {},
     bool checkReach = true,
+    LeadType type = LeadType.patch,
+    Map<SignalLink, LeadType> leadTypes = const {},
   }) {
     final from = device(proposed.from);
     final to = device(proposed.to);
@@ -302,8 +448,14 @@ class SignalBoard {
         )) {
       return LinkIssue.inputOccupied;
     }
-    if (checkReach && !inReach(proposed, positions, flipped: flipped)) {
-      return LinkIssue.range;
+    if (checkReach) {
+      final issue = cableIssue(
+        proposed,
+        positions,
+        flipped: flipped,
+        type: type,
+      );
+      if (issue != null) return issue;
     }
     final remaining = links.where(
       (link) => link.to != proposed.to || link.input != proposed.input,
@@ -313,7 +465,11 @@ class SignalBoard {
     )) {
       return LinkIssue.occupied;
     }
-    if (patchLeadStock case final stock? when remaining.length >= stock) {
+    if (leadStock(type) case final stock?
+        when remaining
+                .where((link) => (leadTypes[link] ?? LeadType.patch) == type)
+                .length >=
+            stock) {
       return LinkIssue.stock;
     }
     final downstream = [proposed.to];
@@ -337,14 +493,27 @@ class SignalBoard {
     required Map<String, SignalPoint> positions,
     Set<String> flipped = const {},
     Map<String, int> losses = const {},
+    Map<SignalLink, LeadType> leadTypes = const {},
   }) {
-    if (patchLeadStock case final stock? when links.length > stock) {
-      return const {};
+    for (final type in LeadType.values) {
+      if (leadStock(type) case final stock?
+          when links
+                  .where((link) => (leadTypes[link] ?? LeadType.patch) == type)
+                  .length >
+              stock) {
+        return const {};
+      }
     }
     final active = {for (final device in devices) device.id: device};
     final outputs = <String, List<SignalLink>>{};
     for (final link in links) {
-      if (inReach(link, positions, flipped: flipped)) {
+      if (cableIssue(
+            link,
+            positions,
+            flipped: flipped,
+            type: leadTypes[link] ?? LeadType.patch,
+          ) ==
+          null) {
         (outputs[link.from] ??= []).add(link);
       }
     }
@@ -480,12 +649,19 @@ class SignalBoard {
             power.reading == SignalReading.accepted &&
                 power.sources.length == 1 &&
                 power.sources.contains(alarm!.source)) &&
-        goals.every(
-          (goal) => deliveries.entries.any(
-            (entry) =>
-                entry.key.to == goal.id &&
-                goal.read(entry.value) == SignalReading.accepted,
-          ),
-        );
+        goals.every((goal) {
+          final incoming = deliveries.entries.where(
+            (entry) => entry.key.to == goal.id,
+          );
+          return goal.mustBeQuiet
+              ? !incoming.any(
+                  (entry) =>
+                      entry.value.channel == goal.channel &&
+                      entry.value.strength > 0,
+                )
+              : incoming.any(
+                  (entry) => goal.read(entry.value) == SignalReading.accepted,
+                );
+        });
   }
 }

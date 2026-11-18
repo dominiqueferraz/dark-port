@@ -51,11 +51,17 @@ class Optic {
 }
 
 class OpticalReceiver {
-  const OpticalReceiver(this.label, this.position, this.incoming);
+  const OpticalReceiver(
+    this.label,
+    this.position,
+    this.incoming, {
+    this.requiredPower,
+  });
 
   final String label;
   final FloorPoint position;
   final BeamDirection incoming;
+  final double? requiredPower;
 }
 
 typedef GridSpot = PlacementNode;
@@ -82,6 +88,7 @@ class OpticalLevel {
     this.alarms = const {},
     this.dark = const {},
     this.blocks = const [],
+    this.mounts = const {},
   });
 
   final String title;
@@ -97,11 +104,15 @@ class OpticalLevel {
   final List<math.Rectangle<double>> blocks;
   final List<Optic> initial;
   final math.Rectangle<double> floor;
+  final Map<String, List<GridSpot>> mounts;
 
   static const opticRadius = .34;
 
-  Iterable<GridSpot> get placementSpots =>
-      _gridSpots.where((spot) => _onDeck(spot.position));
+  Iterable<GridSpot> get placementSpots => mounts.isEmpty
+      ? _gridSpots.where((spot) => _onDeck(spot.position))
+      : mounts.values.expand((spots) => spots).toSet();
+
+  bool canMove(Optic optic) => !optic.fixed && mounts[optic.id]?.length != 1;
 
   bool _onDeck(FloorPoint p) =>
       p.x >= floor.left + opticRadius &&
@@ -109,15 +120,16 @@ class OpticalLevel {
       p.y >= floor.top + opticRadius &&
       p.y <= floor.bottom - opticRadius;
 
-  GridSpot? snapAt(FloorPoint p) {
+  GridSpot? snapAt(FloorPoint p, {String? id}) {
     if (!floor.containsPoint(p)) return null;
-    return nearestPlacementNode(p, placementSpots);
+    return nearestPlacementNode(p, mounts[id] ?? placementSpots);
   }
 
   bool canPlace(Optic optic, List<Optic> layout) {
     final p = optic.position;
-    final spot = snapAt(p);
+    final spot = snapAt(p, id: optic.id);
     return !optic.fixed &&
+        _onDeck(p) &&
         spot != null &&
         blocks.every(
           (block) => !math.Rectangle<double>(
@@ -234,9 +246,17 @@ class OpticalTrace {
 
   bool interruptsAlarm(OpticalLevel level) => !lit.containsAll(level.alarms);
 
+  bool meetsGoal(OpticalLevel level, int receiver) {
+    if (level.dark.contains(receiver)) return !lit.contains(receiver);
+    final power = level.receivers[receiver].requiredPower;
+    return power == null
+        ? lit.contains(receiver)
+        : (receivedPower(receiver) * 100 - power).abs() < _epsilon;
+  }
+
   bool solves(OpticalLevel level) =>
       !interruptsAlarm(level) &&
-      lit.containsAll(level.goal) &&
+      level.goal.every((index) => meetsGoal(level, index)) &&
       lit.intersection(level.dark).isEmpty;
 }
 

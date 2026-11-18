@@ -63,6 +63,66 @@ final fadingSignalLesson = WiredLesson(
   ],
 );
 
+final relayShelfLesson = WiredLesson(
+  'endless.relay-shelf',
+  relayShelfBoard,
+  title: 'Relay Shelf',
+  objective: 'Bring the service antenna online.',
+  goal: 'Deliver at least 40 u to the service antenna.',
+  notes: const [
+    'A powered relay passes the signal through at full strength. Its output starts a new cable leg with its own reach.',
+    'Tap an output and an input to preview the lead. Its symbol shows which type the route needs. Tap the input again to install it.',
+    'A shielded lead can cross the marked interference zone and reaches up to four units.',
+  ],
+);
+
+final twoMastsLesson = WiredLesson(
+  'endless.two-masts',
+  twoMastsBoard,
+  title: 'Two Masts',
+  objective: 'Bring both antennas online.',
+  goal: 'Deliver at least 40 u to Local and 35 u to Remote.',
+  notes: const [
+    'A two-way splitter gives each mast 60 u from the 120 u feed.',
+    'A trunk lead reaches up to six units along a straight, marked run. Crossing the partition requires an aligned trunk feedthrough.',
+    'The feedthrough carries the cable. The concrete still blocks radio.',
+  ],
+);
+
+final quietSectorLesson = WiredLesson(
+  'endless.quiet-sector',
+  quietSectorBoard,
+  title: 'Quiet Sector',
+  objective: 'Power North and West. Keep the protected antenna quiet.',
+  goal: 'Deliver at least 35 u to North and West with no channel-12 signal at the protected antenna.',
+  notes: const [
+    'Quiet means zero delivery on the monitored channel. Even a weak signal can fail this goal.',
+    'Concrete can screen one antenna while radio reaches another around the edge.',
+  ],
+);
+
+final cornerMirrorLesson = OpticalLesson(
+  'endless.corner-mirror',
+  cornerMirrorBoard,
+  objective: 'Light the sensor beyond the baffle.',
+  goal: 'Deliver 100 u to the sensor from its marked approach.',
+  notes: const [
+    'Drag the mirror between its two mounts. Tap to change which way it turns the beam.',
+    'A baffle stops light. The sensor reads only from its marked approach.',
+  ],
+);
+
+final splitAroundBaffleLesson = OpticalLesson(
+  'endless.split-around-baffle',
+  splitAroundBaffleBoard,
+  objective: 'Light both sensors at once.',
+  goal: 'Deliver 50 u to each sensor from its marked approach.',
+  notes: const [
+    'Tap the splitter to change which way its turned half travels.',
+    'The mirror preserves its branch’s strength. Drag it between the two mounts to change where that branch turns.',
+  ],
+);
+
 const _signalRouting = EndlessGroup.signalRouting;
 
 enum EndlessLevel {
@@ -93,12 +153,17 @@ enum EndlessLevel {
   final String title;
   final EndlessGroup group;
   final int? variantOf;
-  WiredLesson? get lesson => switch (this) {
+  TutorialLesson? get lesson => switch (this) {
     antennaTest => antennaTestLesson,
     edgeOfCoverage => edgeOfCoverageLesson,
     blindCorner => blindCornerLesson,
     nightLights => nightLightsLesson,
     fadingSignal => fadingSignalLesson,
+    relayShelf => relayShelfLesson,
+    twoMasts => twoMastsLesson,
+    quietSector => quietSectorLesson,
+    cornerMirror => cornerMirrorLesson,
+    splitAroundTheBaffle => splitAroundBaffleLesson,
     _ => null,
   };
 
@@ -122,6 +187,23 @@ enum EndlessLevel {
     fadingSignal => const {
       'four-step-hop': 'Deliver at least 40 u to the service antenna over a four-step radio hop.',
     },
+    relayShelf => const {
+      'shielded-relay': 'Deliver 40 u to the service antenna through a powered relay and a shielded cable leg.',
+    },
+    twoMasts => const {
+      'trunk-fed-masts':
+          'Deliver 40 u to Local and 35 u to Remote at the same time.',
+    },
+    quietSector => const {
+      'screened-antenna': 'Bring both required antennas online while the concrete screens the protected antenna.',
+    },
+    cornerMirror => const {
+      'clear-turn':
+          'Deliver all 100 u to the sensor by turning around the baffle.',
+    },
+    splitAroundTheBaffle => const {
+      'two-halves': 'Deliver 50 u to each sensor, with one branch routed around the baffle.',
+    },
     _ => const {},
   };
 
@@ -133,7 +215,12 @@ enum EndlessLevel {
   ];
 
   String? solutionFor(SignalBoardState state) {
-    if (state.board != lesson?.board || !state.solved) return null;
+    final fixture = lesson;
+    if (fixture is! WiredLesson ||
+        fixture.board != state.board ||
+        !state.solved) {
+      return null;
+    }
     if (this != nightLights) return solutionIds.single;
     return switch (state.deliveries.keys
         .singleWhere((link) => link.from == 'feed')

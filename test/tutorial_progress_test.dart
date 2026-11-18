@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:dark_port/endless_levels.dart';
 import 'package:dark_port/game_save.dart';
 import 'package:dark_port/optical_bay.dart';
 import 'package:dark_port/tutorial.dart';
@@ -58,6 +59,7 @@ void main() {
     expect(beforeSplit.isUnlocked(splitRatings), isTrue);
     expect(beforeSplit.isUnlocked(fanOut), isFalse);
     expect(beforeSplit.record(GameSave(fanOut)).boards, isEmpty);
+    expect(beforeSplit.open(fanOut), same(beforeSplit));
     final afterSplit = TutorialProgress(
       completed: {...beforeSplit.completed, splitRatings.id},
     );
@@ -66,6 +68,29 @@ void main() {
     expect(afterSplit.isComplete(fanOut), isFalse);
     expect(afterSplit.isUnlocked(keepalive), isFalse);
   });
+
+  test(
+    'legacy saves reveal components from completion and saved board evidence',
+    () {
+      final progress = TutorialProgress(
+        completed: {firstReflection.id},
+        boards: {dividedBeam.id: GameSave(dividedBeam)},
+        endlessBoards: {relayShelfLesson.id: GameSave(relayShelfLesson)},
+      );
+      final old = progress.toJson()..remove('opened');
+      final loaded = TutorialProgress.fromJson(jsonDecode(jsonEncode(old)));
+      expect(loaded.openedLessons.toSet(), {
+        firstReflection,
+        dividedBeam,
+        relayShelfLesson,
+      });
+      expect(loaded.open(twoMastsLesson).opened, {
+        ...loaded.opened,
+        twoMastsLesson.id,
+      });
+      expect(loaded.open(relayShelfLesson), same(loaded));
+    },
+  );
 
   test('Bench Pad requires a flip at every legal placement dot', () {
     const link = (from: 'attenuator', to: 'meter', input: 0, output: 0);

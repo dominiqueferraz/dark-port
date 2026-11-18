@@ -46,6 +46,14 @@ class SignalBoardGeometry {
       project(SignalPoint(wall.x, wall.bottom)).dy,
     );
   }
+
+  Rect interferenceBounds(math.Rectangle<double> zone) => Rect.fromPoints(
+    project(SignalPoint(zone.left, zone.top)),
+    project(SignalPoint(zone.right, zone.bottom)),
+  );
+
+  Rect feedthroughBounds(SignalPoint jack) =>
+      Rect.fromCenter(center: project(jack), width: 11, height: 11);
 }
 
 /// Renders a wired board. The caller supplies the displayed snapshot and
@@ -64,6 +72,7 @@ class SignalPlayfield extends StatelessWidget {
     this.onBackgroundTap,
     this.placement,
     this.selectedOutput,
+    this.preview,
     this.animatedRevision,
   });
 
@@ -79,6 +88,7 @@ class SignalPlayfield extends StatelessWidget {
   final VoidCallback? onBackgroundTap;
   final SignalPlacement? placement;
   final SignalOutput? selectedOutput;
+  final SignalLink? preview;
   final int? animatedRevision;
 
   SignalBoard get _board => state.board;
@@ -94,6 +104,9 @@ class SignalPlayfield extends StatelessWidget {
       final sheet = context.sheet;
       final drag = placement;
       final routes = _routes(geometry);
+      final previewPath = preview == null
+          ? null
+          : _board.corridorFor(preview!, positions, flipped: state.flipped);
       final radio = [
         for (final mast in _board.devices)
           if (mast.radioRange > 0) _radioCoverage(mast, geometry, sheet),
@@ -125,7 +138,7 @@ class SignalPlayfield extends StatelessWidget {
                     child: CustomPaint(
                       key: const ValueKey('signal-placement-marks'),
                       painter: _SignalPlacementMarks(
-                        _board.placementNodes,
+                        _board.mountsFor(drag?.id),
                         drag,
                         geometry,
                         sheet,
@@ -135,6 +148,12 @@ class SignalPlayfield extends StatelessWidget {
                 _wiring(context, geometry, sheet, routes),
                 for (final coverage in radio)
                   IgnorePointer(child: CustomPaint(painter: coverage)),
+                if (previewPath != null)
+                  IgnorePointer(
+                    child: CustomPaint(
+                      painter: _CablePreview(geometry, previewPath, sheet),
+                    ),
+                  ),
                 IgnorePointer(
                   child: CustomPaint(
                     painter: _SignalAnnotations(
@@ -143,6 +162,7 @@ class SignalPlayfield extends StatelessWidget {
                       state: state,
                       positions: positions,
                       routes: routes,
+                      preview: previewPath,
                       radioSpans: [
                         for (final coverage in radio)
                           for (final target in [
@@ -207,7 +227,7 @@ class SignalPlayfield extends StatelessWidget {
       for (final link in state.links)
         link: signalCableOpacity(
           _board.distance(link, positions, flipped: state.flipped) /
-              _board.device(link.from)!.range,
+              _board.leadReach(link.from, state.leadType(link)),
         ),
     };
     final sourceStrength = _board.devices
@@ -301,6 +321,12 @@ class SignalPlayfield extends StatelessWidget {
             to: Offset(state.flipped.contains(link.to) ? 1 : -1, 0),
           ),
       },
+      corridors: {
+        for (final link in state.links)
+          if (_board.corridorFor(link, positions, flipped: state.flipped)
+              case final corridor?)
+            link: corridor.points.map(geometry.project).toList(),
+      },
     );
     Offset project(Offset point) => display.project(geometry.unproject(point));
     return [
@@ -334,6 +360,7 @@ class _SignalAnnotations extends CustomPainter {
     required this.state,
     required this.positions,
     required this.routes,
+    required this.preview,
     required this.radioSpans,
     required this.jacks,
     required this.awardBounds,
@@ -345,6 +372,7 @@ class _SignalAnnotations extends CustomPainter {
   final SignalBoardState state;
   final Map<String, SignalPoint> positions;
   final List<SignalCablePath> routes;
+  final CableCorridor? preview;
   final List<(Offset, Offset)> radioSpans;
   final List<Offset> jacks;
   final Rect awardBounds;
@@ -355,11 +383,19 @@ class _SignalAnnotations extends CustomPainter {
     final step = geometry.tile.shortestSide;
     final radius = (step * .19).clamp(6.0, 9.0);
     final reach = step * .22;
+    final board = state.board;
+    final corridors = board.cableCorridors ?? const <CableCorridor>[];
     final segments = [
       ...radioSpans,
       for (final route in routes)
         for (var i = 1; i < route.points.length; i++)
           (route.points[i - 1], route.points[i]),
+      for (final corridor in [...corridors, ?preview])
+        for (var i = 1; i < corridor.points.length; i++)
+          (
+            geometry.project(corridor.points[i - 1]),
+            geometry.project(corridor.points[i]),
+          ),
     ];
     final readouts = [
       for (final device in state.board.devices)
@@ -387,13 +423,18 @@ class _SignalAnnotations extends CustomPainter {
           ),
         for (final jack in jacks) Rect.fromCircle(center: jack, radius: 4),
         if (!awardBounds.isEmpty) awardBounds,
-        for (final wall in state.board.radioWalls) geometry.wallBounds(wall),
+        for (final wall in board.radioWalls) geometry.wallBounds(wall),
+        if (board.interference case final zone?)
+          geometry.interferenceBounds(zone),
+        for (final jack in board.feedthroughs.keys)
+          geometry.feedthroughBounds(jack),
       ],
       leaderObstacles: [
         for (final jack in jacks) (center: jack, radius: 4.0),
         for (final reading in readouts) (center: reading, radius: step * .18),
       ],
     );
+    _paintCorridorLabels(canvas, annotations);
     final gaps = [step * .32, step * .50, step * .70, step * .94, step * 1.18];
     for (final (index, device) in state.board.devices.indexed) {
       final anchor = geometry.project(positions[device.id]!);
@@ -435,21 +476,93 @@ class _SignalAnnotations extends CustomPainter {
       for (var i = 1; i < route.points.length; i++)
         (route.points[i - 1], route.points[i]),
     ]..sort((a, b) => (b.$2 - b.$1).distance.compareTo((a.$2 - a.$1).distance));
-    for (final (from, to) in spans) {
-      if ((to - from).distance < 27) continue;
-      final center = (from + to) / 2;
-      final side = (to - from).dx.abs() > (to - from).dy.abs()
-          ? const Offset(0, 15)
-          : const Offset(28, 0);
-      for (final note in [center - side, center + side]) {
-        final left = note.translate(-23, 0);
-        final right = note.translate(23, 0);
-        if (![left, note, right].every((p) => annotations.hasRoom(p, 5))) {
-          continue;
-        }
-        paintLettering(canvas, label, note, size: 10, color: sheet.ink);
-        return;
+    final lettering = layoutDraftingLettering(
+      label,
+      size: 10,
+      color: sheet.ink,
+    );
+    final note = annotations.placeLabel(lettering.size, [
+      for (final (from, to) in spans)
+        if ((to - from).distance >= 27)
+          for (final sign in [-1, 1])
+            (from + to) / 2 +
+                ((to - from).dx.abs() > (to - from).dy.abs()
+                    ? Offset(0, sign * 15.0)
+                    : Offset(sign * (lettering.width / 2 + 8), 0)),
+    ]);
+    if (note != null) lettering.paint(canvas, note.topLeft);
+    lettering.dispose();
+  }
+
+  void _paintCorridorLabels(Canvas canvas, DraftingAnnotations annotations) {
+    final board = state.board;
+    for (final corridor in board.cableCorridors ?? const <CableCorridor>[]) {
+      if (!corridor.trunk) continue;
+      final from = geometry.project(corridor.points.first);
+      final to = geometry.project(corridor.points.last);
+      final span = to - from;
+      final normal = Offset(-span.dy, span.dx) / span.distance;
+      final text = layoutDraftingLettering(
+        'TRUNK RUN',
+        size: 9,
+        color: sheet.ink,
+      );
+      final label = annotations.placeLabel(text.size, [
+        for (final gap in [-13.0, 13.0, -23.0, 23.0])
+          for (final fraction in [.75, .25, .6, .4])
+            from + span * fraction + normal * gap,
+      ]);
+      if (label != null) text.paint(canvas, label.topLeft);
+      text.dispose();
+    }
+    if (board.interference case final zone?) {
+      final area = geometry.interferenceBounds(zone);
+      final text = layoutDraftingLettering(
+        'INTERFERENCE',
+        size: 9,
+        color: sheet.ink,
+      );
+      final gap = text.height / 2 + 5;
+      final label = annotations.placeLabel(text.size, [
+        area.bottomCenter.translate(0, gap),
+        area.topCenter.translate(0, -gap),
+        area.centerRight.translate(text.width / 2 + 5, 0),
+        area.centerLeft.translate(-text.width / 2 - 5, 0),
+      ]);
+      if (label != null) text.paint(canvas, label.topLeft);
+      text.dispose();
+    }
+    for (final jack in board.feedthroughs.keys) {
+      final box = geometry.feedthroughBounds(jack);
+      final text = layoutDraftingLettering(
+        'FEEDTHROUGH',
+        size: 9,
+        color: sheet.ink,
+      );
+      final width = text.width / 2 + box.width / 2 + 12;
+      final label = annotations.placeLabel(text.size, [
+        for (final dy in [19.0, 29.0, -19.0, -29.0])
+          for (final dx in [width, -width]) box.center.translate(dx, dy),
+      ]);
+      if (label != null) {
+        final right = label.center.dx > box.center.dx;
+        final below = label.center.dy > box.center.dy;
+        final start = below
+            ? (right ? box.bottomRight : box.bottomLeft)
+            : (right ? box.topRight : box.topLeft);
+        final end = right
+            ? label.centerLeft.translate(-2, 0)
+            : label.centerRight.translate(2, 0);
+        canvas.drawLine(
+          start,
+          end,
+          Paint()
+            ..color = sheet.fineRule
+            ..strokeWidth = .8,
+        );
+        text.paint(canvas, label.topLeft);
       }
+      text.dispose();
     }
   }
 
@@ -460,6 +573,7 @@ class _SignalAnnotations extends CustomPainter {
       state != oldDelegate.state ||
       positions != oldDelegate.positions ||
       routes != oldDelegate.routes ||
+      preview != oldDelegate.preview ||
       radioSpans != oldDelegate.radioSpans ||
       awardBounds != oldDelegate.awardBounds ||
       inspectedPart != oldDelegate.inspectedPart;
@@ -491,12 +605,75 @@ class _SignalGrid extends CustomPainter {
         sheet,
       );
     }
+    Offset project(SignalPoint point) => geometry.project(point) + grid.topLeft;
+    final guide = Paint()
+      ..color = sheet.faint
+      ..strokeWidth = .8;
+    for (final corridor in board.cableCorridors ?? const <CableCorridor>[]) {
+      final points = corridor.points.map(project).toList();
+      for (var index = 1; index < points.length; index++) {
+        final delta = points[index] - points[index - 1];
+        final length = delta.distance;
+        if (length == 0) continue;
+        final unit = delta / length;
+        for (var step = 0.0; step < length; step += 7) {
+          canvas.drawLine(
+            points[index - 1] + unit * step,
+            points[index - 1] + unit * math.min(step + 3, length),
+            guide,
+          );
+        }
+      }
+    }
+    if (board.interference case final zone?) {
+      final area = geometry.interferenceBounds(zone).shift(grid.topLeft);
+      paintHatchedBarrier(canvas, area, sheet);
+    }
+    for (final jack in board.feedthroughs.keys) {
+      final box = geometry.feedthroughBounds(jack).shift(grid.topLeft);
+      canvas.drawRect(box, Paint()..color = sheet.paper);
+      canvas.drawRect(
+        box,
+        Paint()
+          ..color = sheet.ink
+          ..style = PaintingStyle.stroke,
+      );
+    }
   }
 
   @override
   bool shouldRepaint(_SignalGrid oldDelegate) =>
       geometry.tile != oldDelegate.geometry.tile ||
       board != oldDelegate.board ||
+      sheet != oldDelegate.sheet;
+}
+
+class _CablePreview extends CustomPainter {
+  const _CablePreview(this.geometry, this.corridor, this.sheet);
+
+  final SignalBoardGeometry geometry;
+  final CableCorridor corridor;
+  final SheetStyle sheet;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path()
+      ..addPolygon(corridor.points.map(geometry.project).toList(), false);
+    final paint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeWidth = 2
+      ..color = sheet.ink;
+    final line = path.computeMetrics().single;
+    for (var start = 0.0; start < line.length; start += 8) {
+      canvas.drawPath(line.extractPath(start, start + 4), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_CablePreview oldDelegate) =>
+      geometry.tile != oldDelegate.geometry.tile ||
+      corridor != oldDelegate.corridor ||
       sheet != oldDelegate.sheet;
 }
 

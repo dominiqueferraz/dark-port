@@ -18,6 +18,7 @@ class DraftingAnnotations {
   final List<(Offset, Offset)> traces;
   final List<({Offset center, double radius})> leaderObstacles;
   final List<Rect> _obstacles;
+  final List<Rect> _labels = [];
 
   static final _directions = [
     for (final degrees in [
@@ -49,6 +50,27 @@ class DraftingAnnotations {
             distanceToDraftingSegment(point, span.$1, span.$2) < clearance + 1,
       );
 
+  Rect? placeLabel(Size size, Iterable<Offset> centers) {
+    for (final center in centers) {
+      final label = Rect.fromCenter(
+        center: center,
+        width: size.width,
+        height: size.height,
+      );
+      final clearance = label.inflate(3);
+      if (!bounds.contains(clearance.topLeft) ||
+          !bounds.contains(clearance.bottomRight) ||
+          _obstacles.any(clearance.overlaps) ||
+          traces.any((span) => _crossesRect(span.$1, span.$2, clearance))) {
+        continue;
+      }
+      _labels.add(clearance);
+      _obstacles.add(clearance);
+      return label;
+    }
+    return null;
+  }
+
   ({Offset center, double reach})? placeBalloon({
     required Offset anchor,
     required double radius,
@@ -68,10 +90,12 @@ class DraftingAnnotations {
       final edge = reachAt?.call(direction) ?? reach;
       final start = anchor + direction * edge;
       final end = center - direction * radius;
-      if (leaderObstacles.any(
-        (mark) =>
-            distanceToDraftingSegment(mark.center, start, end) < mark.radius,
-      )) {
+      if (_labels.any((label) => _crossesRect(start, end, label)) ||
+          leaderObstacles.any(
+            (mark) =>
+                distanceToDraftingSegment(mark.center, start, end) <
+                mark.radius,
+          )) {
         continue;
       }
       _obstacles.add(Rect.fromCircle(center: center, radius: radius));
@@ -79,6 +103,26 @@ class DraftingAnnotations {
     }
     return null;
   }
+}
+
+bool _crossesRect(Offset from, Offset to, Rect rect) {
+  if (math.max(from.dx, to.dx) < rect.left ||
+      math.min(from.dx, to.dx) > rect.right ||
+      math.max(from.dy, to.dy) < rect.top ||
+      math.min(from.dy, to.dy) > rect.bottom) {
+    return false;
+  }
+  final span = to - from;
+  final sides = [
+    for (final corner in [
+      rect.topLeft,
+      rect.topRight,
+      rect.bottomLeft,
+      rect.bottomRight,
+    ])
+      span.dx * (corner.dy - from.dy) - span.dy * (corner.dx - from.dx),
+  ];
+  return sides.any((side) => side <= 0) && sides.any((side) => side >= 0);
 }
 
 double distanceToDraftingSegment(Offset point, Offset from, Offset to) {

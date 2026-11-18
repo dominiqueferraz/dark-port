@@ -130,16 +130,22 @@ void paintLettering(
   double size = 10,
   required Color color,
 }) {
-  final painter = TextPainter(
-    text: TextSpan(
-      text: text,
-      style: draftingLettering(size, color: color, spacing: .4),
-    ),
-    textDirection: TextDirection.ltr,
-  )..layout();
+  final painter = layoutDraftingLettering(text, size: size, color: color);
   painter.paint(canvas, center - painter.size.center(Offset.zero));
   painter.dispose();
 }
+
+TextPainter layoutDraftingLettering(
+  String text, {
+  required double size,
+  required Color color,
+}) => TextPainter(
+  text: TextSpan(
+    text: text,
+    style: draftingLettering(size, color: color, spacing: .4),
+  ),
+  textDirection: TextDirection.ltr,
+)..layout();
 
 /// The lesson's title block, stamped once the drawing is approved.
 class DraftingTitleBlock extends StatelessWidget {

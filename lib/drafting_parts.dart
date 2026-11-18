@@ -99,7 +99,7 @@ class DraftingPartRow extends StatelessWidget {
                 style: draftingLettering(size, color: color, spacing: tracking),
               ),
             ),
-            SizedBox(width: 24, height: header ? 12 : 23, child: symbol),
+            SizedBox(width: 24, height: header ? 12 : 20, child: symbol),
             const SizedBox(width: 3),
             Expanded(
               child: Text(

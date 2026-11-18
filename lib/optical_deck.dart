@@ -106,6 +106,7 @@ class OpticalDeck extends StatelessWidget {
     required this.dropSpot,
     required this.validDrop,
     required this.opened,
+    this.awardBounds = Rect.zero,
   });
 
   final OpticalDeckGeometry geometry;
@@ -115,6 +116,7 @@ class OpticalDeck extends StatelessWidget {
   final GridSpot? dropSpot;
   final bool validDrop;
   final bool opened;
+  final Rect awardBounds;
 
   @override
   Widget build(BuildContext context) {
@@ -137,6 +139,7 @@ class OpticalDeck extends StatelessWidget {
             dropSpot: dropSpot,
             validDrop: validDrop,
             opened: opened,
+            awardBounds: awardBounds,
           ),
         ),
         _endpoint(
@@ -196,6 +199,7 @@ class _OpticalDrawing extends CustomPainter {
     required this.dropSpot,
     required this.validDrop,
     required this.opened,
+    required this.awardBounds,
   });
 
   final SheetStyle style;
@@ -207,6 +211,7 @@ class _OpticalDrawing extends CustomPainter {
   final GridSpot? dropSpot;
   final bool validDrop;
   final bool opened;
+  final Rect awardBounds;
 
   OpticalLevel get level => geometry.level;
 
@@ -238,6 +243,10 @@ class _OpticalDrawing extends CustomPainter {
   /// Whether a note at [p] would touch the wall, a beam or another note.
   bool _crowded(Offset p, List<Offset> reserved, double room) =>
       _wallClearance(p) < room ||
+      (!awardBounds.isEmpty && awardBounds.inflate(room).contains(p)) ||
+      level.blocks.any(
+        (block) => _blockBounds(block).inflate(room).contains(p),
+      ) ||
       reserved.any((other) => (other - p).distance < room * 1.6) ||
       trace.segments.any(
         (beam) =>
@@ -252,7 +261,7 @@ class _OpticalDrawing extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     _paintZones(canvas);
-    if (held != null) _paintPlacement(canvas);
+    if (held != null || level.mounts.isNotEmpty) _paintPlacement(canvas);
     _paintBlocks(canvas);
     if (level == reflectionLesson && !opened) _paintReceiverDatum(canvas);
     _paintBeams(canvas);
@@ -270,7 +279,6 @@ class _OpticalDrawing extends CustomPainter {
     ];
     final mirrorLeaders = _paintCallouts(canvas, reserved);
     if (!opened) _paintClearances(canvas, reserved);
-    _paintExits(canvas, reserved);
     _paintBalloons(canvas, reserved, mirrorLeaders);
   }
 
@@ -321,7 +329,11 @@ class _OpticalDrawing extends CustomPainter {
     final mark = _ink(.8, color: style.faint);
     final arm = geometry.glyphSize * .22;
     for (final spot in level.placementSpots) {
-      if (!level.canPlace(held!.at(spot.position), layout)) continue;
+      if (held case final optic?
+          when !level.canPlace(optic.at(spot.position), layout)) {
+        continue;
+      }
+      if (_placed.any((optic) => optic.position == spot.position)) continue;
       final p = geometry.project(spot.position);
       canvas.drawLine(p - Offset(arm, 0), p + Offset(arm, 0), mark);
       canvas.drawLine(p - Offset(0, arm), p + Offset(0, arm), mark);
@@ -408,37 +420,6 @@ class _OpticalDrawing extends CustomPainter {
         (end.y - floor.bottom).abs() < 1e-6;
   }
 
-  void _paintExits(Canvas canvas, List<Offset> reserved) {
-    for (final beam in trace.segments.where(_exitsBay)) {
-      final start = geometry.project(beam.from);
-      final end = _beamEnd(beam);
-      final delta = end - start;
-      if (delta.distance < 30) continue;
-      final unit = delta / delta.distance;
-      final side = Offset(-unit.dy, unit.dx);
-      final horizontal = unit.dx.abs() > .5;
-      final endInset = horizontal ? 29.0 : 15.0;
-      final sideInset = horizontal ? 12.0 : 31.0;
-      for (final sign in [-1, 1]) {
-        final center = end - unit * endInset + side * (sideInset * sign);
-        final left = center.translate(-21, 0);
-        final right = center.translate(21, 0);
-        if ([left, center, right].any((p) => _crowded(p, reserved, 7))) {
-          continue;
-        }
-        paintLettering(
-          canvas,
-          'EXITS BAY',
-          center,
-          size: 10,
-          color: _beamColor(beam),
-        );
-        reserved.addAll([left, center, right]);
-        break;
-      }
-    }
-  }
-
   Color _beamColor(BeamSegment beam) =>
       level.alarms.contains(beam.receiver) ? style.alarmBeam : style.beam;
 
@@ -519,13 +500,13 @@ class _OpticalDrawing extends CustomPainter {
                   ),
                 );
             final option = (start: start, sweep: sweep, label: label);
-            choice ??= option;
             if (!_crowded(label, reserved, 12)) {
               choice = option;
               break;
             }
           }
-          final (:start, :sweep, :label) = choice!;
+          if (choice == null) continue;
+          final (:start, :sweep, :label) = choice;
           if (optic.kind == OpticKind.mirror) {
             leaders.putIfAbsent(optic.id, () => start + sweep);
             _paintMirrorDatum(canvas, center, start + math.pi);
@@ -715,6 +696,7 @@ class _OpticalDrawing extends CustomPainter {
         for (final point in reserved)
           Rect.fromCircle(center: point, radius: r * .9),
         ...level.blocks.map(_blockBounds),
+        if (!awardBounds.isEmpty) awardBounds,
       ],
       traces: [
         for (final beam in trace.segments)
@@ -773,5 +755,6 @@ class _OpticalDrawing extends CustomPainter {
       held != oldDelegate.held ||
       dropSpot != oldDelegate.dropSpot ||
       validDrop != oldDelegate.validDrop ||
+      awardBounds != oldDelegate.awardBounds ||
       opened != oldDelegate.opened;
 }

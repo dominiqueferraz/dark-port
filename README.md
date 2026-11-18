@@ -4,11 +4,15 @@ An offline, landscape puzzle game for iOS and Android. **New game** opens the tu
 
 The required path starts with **First reflection**, **A divided beam** and **The interlock**. **Patch Lead**, **Split Ratings**, **Bench Pad** and **Keepalive** teach the wired mechanics used together in the **Test Line** capstone. After Split Ratings, take the **Four-way fan-out** practice branch or continue to Bench Pad. The practice board has its own completion mark.
 
-**Endless** opens the group path. Select group **1**, **Signal Routing**, to open its puzzle path from **1.1** to **1.20**. Levels **1.1–1.5** are playable and save their progress separately from the tutorial. **Edge of Coverage** branches below **Antenna Test**. Each distinct winning route earns a Solution Star, and **Night Lights** also tracks a four-cable record. See the [Endless level register](endless-level-register.md) for the fixtures and solution checks.
+**Endless** opens the group path. Select group **1**, **Signal Routing**, to open its puzzle path from **1.1** to **1.20**. Levels **1.1–1.10** are playable and save their progress separately from the tutorial. **Edge of Coverage** branches below **Antenna Test**. Each distinct winning route earns a Solution Star, and **Night Lights** also tracks a four-cable record. See the [Endless level register](endless-level-register.md) for the fixtures and solution checks.
 
 **Achievements** on the title screen lists earned and unearned awards with their conditions. Tap the trophy beside the Night Lights stars to inspect its four-cable achievement.
 
 Tap an optic to rotate it or drag it to move it. On a wired board, tap an output and then an input to attach a cable. Drag loose parts to change position and hold one to mirror its ports. On Drafting sheets, loose mirrors have a dashed travel ring and fixed devices use bolt marks where they have a mounting plate. The readings show the current signal and its target. A dropped live line fails the attempt. Undo the edit or reset the board to recover.
+
+On Relay Shelf and Two Masts, tap an output and an input to preview the route and its length. The game matches the lead to the route. Tap the same input again to install it. The inventory uses the same lead symbols as the Parts guide. A move can leave an installed lead dashed if its new route fails a check.
+
+Open **Parts guide** with the **?** button. **This puzzle** lists the types of parts on the current board. The category tabs collect parts from boards you’ve opened in Tutorial and Endless. **Controls** covers placement, rotation, wiring, readings, and undo as applicable. The guide remembers these discoveries when you start a new Tutorial.
 
 The game saves completion and committed board edits locally. Starting a new game asks before replacing existing progress. Older saves keep their board layout and earned credit. Players with a legacy Test Line save unlock it again by completing the four new wiring lessons.
 
@@ -24,7 +28,7 @@ The same `flutter run -d <device-id>` command targets a booted iOS simulator or 
 
 ## Verify
 
-Run `flutter analyze` and `flutter test`. The checks cover the full tutorial and optional branch, unlocking and replay, interrupted alarms, legacy saves, serialized file writes and write retries. The Endless tests walk through levels 1.2–1.5 and exhaust their legal arrangements using the game evaluator.
+Run `flutter analyze` and `flutter test`. The checks cover the full tutorial and optional branch, unlocking and replay, interrupted alarms, legacy saves, serialized file writes and write retries. The Endless tests walk through levels 1.1–1.10 and exhaust their legal arrangements using the game evaluators.
 
 Run `flutter test integration_test/onboarding_test.dart -d <device-id>` for the native tutorial walkthrough or `flutter test integration_test/endless_test.dart -d <device-id>` for the Endless walkthrough. Both exercise local save storage.
 

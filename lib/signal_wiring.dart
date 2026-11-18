@@ -273,6 +273,7 @@ List<SignalCablePath> layoutSignalCables(
   required List<Rect> parts,
   required double lead,
   Map<SignalLink, ({Offset from, Offset to})> directions = const {},
+  Map<SignalLink, List<Offset>> corridors = const {},
   List<Offset> jacks = const [],
 }) {
   final jackPositions = {
@@ -284,21 +285,24 @@ List<SignalCablePath> layoutSignalCables(
     final (from: from, to: to) = ports[link]!;
     final direction = directions[link];
     if ((to - from).distanceSquared < .25) continue;
-    final points = _routeCable(
-      from,
-      to,
-      direction?.from ?? const Offset(1, 0),
-      direction?.to ?? const Offset(-1, 0),
-      bounds,
-      parts,
-      lead,
-      routes.expand((route) => _segments(route.points)).toList(),
-      routes
-          .where((route) => route.link.to == link.to)
-          .expand((route) => _segments(route.points))
-          .toList(),
-      jackPositions,
-    );
+    final corridor = corridors[link];
+    final points = corridor != null
+        ? _roundBends(corridor, lead)
+        : _routeCable(
+            from,
+            to,
+            direction?.from ?? const Offset(1, 0),
+            direction?.to ?? const Offset(-1, 0),
+            bounds,
+            parts,
+            lead,
+            routes.expand((route) => _segments(route.points)).toList(),
+            routes
+                .where((route) => route.link.to == link.to)
+                .expand((route) => _segments(route.points))
+                .toList(),
+            jackPositions,
+          );
 
     final overpasses = <Offset>[];
     for (final route in routes) {

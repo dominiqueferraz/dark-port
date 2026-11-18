@@ -20,32 +20,68 @@ class TutorialProgress {
     this.tutorialStarted = true,
     Map<String, GameSave> endlessBoards = const {},
     Map<String, EndlessResult> endlessResults = const {},
+    Set<String> opened = const {},
   }) : completed = Set.unmodifiable(completed),
        boards = Map.unmodifiable(boards),
        endlessBoards = Map.unmodifiable(endlessBoards),
-       endlessResults = Map.unmodifiable(endlessResults);
+       endlessResults = Map.unmodifiable(endlessResults),
+       opened = Set.unmodifiable({
+         ...opened,
+         ...completed,
+         ...boards.keys,
+         ...endlessBoards.keys,
+         ...endlessResults.keys,
+       });
 
   final Set<String> completed;
   final Map<String, GameSave> boards;
   final bool tutorialStarted;
   final Map<String, GameSave> endlessBoards;
   final Map<String, EndlessResult> endlessResults;
+  final Set<String> opened;
+
+  static TutorialLesson? _lessonFor(String id) =>
+      lessonsById[id] ?? endlessLevelsByLessonId[id]?.lesson;
+
+  Iterable<TutorialLesson> get openedLessons => opened.map(_lessonFor).nonNulls;
+
+  TutorialProgress open(TutorialLesson lesson) {
+    if (opened.contains(lesson.id) || _lessonFor(lesson.id) != lesson) {
+      return this;
+    }
+    if (lessonsById.containsKey(lesson.id) && !isUnlocked(lesson)) return this;
+    return TutorialProgress(
+      completed: completed,
+      boards: boards,
+      tutorialStarted: tutorialStarted,
+      endlessBoards: endlessBoards,
+      endlessResults: endlessResults,
+      opened: {...opened, lesson.id},
+    );
+  }
 
   EndlessResult? resultFor(EndlessLevel level) {
     final id = level.lesson?.id;
     final result = endlessResults[id];
     if (result != null) return result;
     // Early Endless saves contain the winning board but no star metadata.
-    final state = endlessBoards[id]?.signal;
-    if (state == null) return null;
-    final star = level.solutionFor(state);
+    final board = endlessBoards[id];
+    if (board == null) return null;
+    final star = _starFor(level, board);
     if (star == null) return null;
     return (
       revision: level.fixtureRevision,
       stars: Set.unmodifiable({star}),
       fourCableRecord:
-          level == EndlessLevel.nightLights && state.links.length == 4,
+          level == EndlessLevel.nightLights && board.links.length == 4,
     );
+  }
+
+  String? _starFor(EndlessLevel level, GameSave board) {
+    if (board.lesson != level.lesson || !board.solved) return null;
+    return board.signal == null
+        ? level.solutionIds.single
+        : level.solutionFor(board.signal!);
   }
 
   bool isComplete(TutorialLesson lesson) =>
@@ -68,6 +104,7 @@ class TutorialProgress {
       boards: {...boards, board.lesson.id: board},
       endlessBoards: endlessBoards,
       endlessResults: endlessResults,
+      opened: opened,
     );
   }
 
@@ -76,7 +113,7 @@ class TutorialProgress {
     final level = endlessLevelsByLessonId[id]!;
     final saved = endlessBoards[id];
     final previous = resultFor(level);
-    final star = level.solutionFor(board.signal!);
+    final star = _starFor(level, board);
     final record =
         level == EndlessLevel.nightLights &&
         star == 'balanced' &&
@@ -91,6 +128,7 @@ class TutorialProgress {
       boards: boards,
       tutorialStarted: tutorialStarted,
       endlessBoards: {...endlessBoards, if (saved?.solved != true) id: board},
+      opened: opened,
       endlessResults: {
         ...endlessResults,
         if (newCredit)
@@ -107,6 +145,7 @@ class TutorialProgress {
     'version': 12,
     'completed': completed.toList(),
     'boards': boards.values.map((board) => board.toJson()).toList(),
+    if (opened.isNotEmpty) 'opened': opened.toList(),
     if (!tutorialStarted) 'tutorialStarted': false,
     if (endlessBoards.isNotEmpty)
       'endlessBoards': endlessBoards.values
@@ -142,6 +181,16 @@ class TutorialProgress {
       endlessLevelsByLessonId.containsKey,
     );
     final started = json['tutorialStarted'];
+    final openedRows = json['opened'] ?? const [];
+    if (openedRows is! List) {
+      throw const FormatException('Invalid opened puzzles.');
+    }
+    final opened = <String>{};
+    for (final id in openedRows) {
+      if (id is! String || _lessonFor(id) == null || !opened.add(id)) {
+        throw const FormatException('Invalid opened puzzle.');
+      }
+    }
     if ((started != null && started is! bool) ||
         (started == false && (ids.isNotEmpty || boards.isNotEmpty))) {
       throw const FormatException('Invalid tutorial state.');
@@ -150,6 +199,7 @@ class TutorialProgress {
       completed: ids,
       boards: boards,
       tutorialStarted: started != false,
+      opened: opened,
       endlessBoards: endless,
       endlessResults: _readEndlessResults(
         json['endlessResults'] ?? const {},
