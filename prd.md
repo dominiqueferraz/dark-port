@@ -164,6 +164,11 @@ Ship each group or playable slice with a beginning, a result and a replay. Verif
 
 Reuse the solved and tested fixtures. Add the opening, notebook and clues, then prototype power routing, room eligibility and a second station cycle. Validate the cycle as a game loop before connecting its story rooms. Deliver the crew rescue and finale as campaign progress. Keep Endless directly available from the title screen throughout.
 
+### Future mechanics for Endless and campaign levels
+
+- **Programmable boards.** Introduce boards that accept player-written programs at two levels. Basic boards run a small machine language with instructions to read inputs, branch and write to outputs. More capable boards accept a higher-level language with named variables, conditionals and loops. Build on the data and timing puzzles by having programs read routed signals and produce outputs that the level checks. Let the player step through execution and inspect the inputs and outputs as they change.
+- **Physical movement.** Add switches, doors, elevators and similar mechanisms that change where the player or a movable object can go within a level. A switch can send a control signal, a door can open a passage and an elevator can connect floors. Make the resulting movement part of the solve. For example, route power to an elevator, carry a component to the upper floor and use it to complete a second circuit.
+
 ## Core rules
 
 These rules hold on every board. Groups introduce new parts while reusing these rules. Units are game units, written `u`.
