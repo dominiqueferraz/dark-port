@@ -101,7 +101,7 @@ class PuzzleConsole extends StatelessWidget {
   static const _awardCell = _awardSize + 2 * _awardInset;
   static const _blueprintFlex = 7;
   static const _infoFlex = 3;
-  // Seven toolbar buttons have room for their icons and the ruled dividers.
+  // Leave room for the settings toolbar and its ruled dividers.
   static const _minSettingsToolbarWidth = 232.0;
 
   @override
@@ -159,13 +159,13 @@ class PuzzleConsole extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 8),
-            ?_objective(),
+            if (brief.sheet == null) ?_objective(),
             _ReadingsFrame(child: readings),
             ...feedback,
             if (brief.sheet != null)
               Padding(
                 padding: const EdgeInsets.only(top: 8),
-                child: _titleBlock(),
+                child: _titleBlock(context),
               ),
             if (failureMessage case final message?) ...[
               const SizedBox(height: 6),
@@ -283,16 +283,23 @@ class PuzzleConsole extends StatelessWidget {
         _toolbar(context),
         ?inventory,
         const SizedBox(height: 6),
-        if (brief.sheet != null) ...[_titleBlock(), const SizedBox(height: 6)],
+        if (brief.sheet != null) ...[
+          _titleBlock(context),
+          if (failureMessage != null ||
+              feedback.isNotEmpty ||
+              (solved && navigation.advance != null))
+            const SizedBox(height: 6),
+        ],
         if (failureMessage case final message?) ...[
           _FailureNotice(message),
           const SizedBox(height: 6),
         ],
-        if (_objective() case final objective?)
-          ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 72),
-            child: SingleChildScrollView(child: objective),
-          ),
+        if (brief.sheet == null)
+          if (_objective() case final objective?)
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 72),
+              child: SingleChildScrollView(child: objective),
+            ),
         if (feedback.isNotEmpty)
           Flexible(
             flex: 2,
@@ -344,8 +351,12 @@ class PuzzleConsole extends StatelessWidget {
     );
   }
 
+  String? get _objectiveText => brief.objective ?? brief.goal;
+
+  bool get _hintBesideGoal => brief.sheet != null && _objectiveText != null;
+
   Widget? _objective() {
-    final objective = brief.objective ?? brief.goal;
+    final objective = _objectiveText;
     if (objective == null) return null;
     return Padding(
       key: const ValueKey('puzzle-objective'),
@@ -354,13 +365,20 @@ class PuzzleConsole extends StatelessWidget {
     );
   }
 
-  Widget _titleBlock() => Semantics(
+  Widget _titleBlock(BuildContext context) => Semantics(
     key: solved ? const ValueKey('lesson-complete') : null,
     liveRegion: solved,
     label: solved ? 'Complete' : null,
     child: DraftingTitleBlock(
       title: brief.title,
       sheet: brief.sheet!,
+      goal: _objectiveText,
+      goalAction: _hintBesideGoal
+          ? SizedBox.square(
+              dimension: 36,
+              child: _hintButton(context, iconSize: 16),
+            )
+          : null,
       status: switch ((solved, failureMessage != null)) {
         (_, true) => DraftingStatus.failed,
         (true, false) => DraftingStatus.approved,
@@ -501,16 +519,10 @@ class PuzzleConsole extends StatelessWidget {
           ),
           const DraftingCellDivider(),
           Expanded(flex: 3, child: tools),
-          const DraftingCellDivider(),
-          Expanded(
-            child: consoleButton(
-              tooltip: 'Hint',
-              onPressed: brief.hasHint && canLeave
-                  ? () => _showHint(context)
-                  : null,
-              icon: const Icon(Icons.lightbulb_outline),
-            ),
-          ),
+          if (!_hintBesideGoal) ...[
+            const DraftingCellDivider(),
+            Expanded(child: _hintButton(context)),
+          ],
           if (onHelp case final help?) ...[
             const DraftingCellDivider(),
             Expanded(
@@ -556,6 +568,12 @@ class PuzzleConsole extends StatelessWidget {
       ),
     );
   }
+
+  Widget _hintButton(BuildContext context, {double? iconSize}) => consoleButton(
+    tooltip: 'Hint',
+    onPressed: brief.hasHint && canLeave ? () => _showHint(context) : null,
+    icon: Icon(Icons.lightbulb_outline, size: iconSize),
+  );
 
   void _showHint(BuildContext context) {
     final sheet = context.sheet;

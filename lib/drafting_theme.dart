@@ -164,11 +164,15 @@ class DraftingTitleBlock extends StatelessWidget {
     required this.title,
     required this.sheet,
     required this.status,
+    this.goal,
+    this.goalAction,
   });
 
   final String title;
   final String sheet;
   final DraftingStatus status;
+  final String? goal;
+  final Widget? goalAction;
 
   Widget _cell(
     BuildContext context,
@@ -176,32 +180,43 @@ class DraftingTitleBlock extends StatelessWidget {
     String value, {
     double size = 11,
     double spacing = 1.1,
-  }) => Padding(
-    padding: const EdgeInsets.fromLTRB(5, 3, 5, 3),
+  }) => _field(
+    context,
+    label,
     // Narrow panels shrink the lettering rather than cutting it off.
-    child: FittedBox(
+    FittedBox(
       fit: BoxFit.scaleDown,
       alignment: Alignment.centerLeft,
-      child: Text.rich(
-        TextSpan(
-          children: [
-            if (label != null)
-              TextSpan(
-                text: '$label ',
-                style: draftingLettering(8, color: context.sheet.faint),
-              ),
-            TextSpan(
-              text: value,
-              style: draftingLettering(
-                size,
-                color: context.sheet.ink,
-                spacing: spacing,
-              ),
-            ),
-          ],
-        ),
+      child: Text(
+        value,
+        style: draftingLettering(
+          size,
+          color: context.sheet.ink,
+          spacing: spacing,
+        ).copyWith(height: 1),
         maxLines: 1,
       ),
+    ),
+  );
+
+  Widget _field(BuildContext context, String? label, Widget value) => Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (label != null) ...[
+          Text(
+            label,
+            style: draftingLettering(
+              8,
+              color: context.sheet.faint,
+            ).copyWith(height: 1),
+          ),
+          const SizedBox(height: 1),
+        ],
+        value,
+      ],
     ),
   );
 
@@ -209,31 +224,24 @@ class DraftingTitleBlock extends StatelessWidget {
   Widget build(BuildContext context) {
     final ink = context.sheet.ink;
     final approved = status == DraftingStatus.approved;
-    return Semantics(
-      container: true,
-      liveRegion: status == DraftingStatus.failed,
-      label: 'Sheet $sheet, ${status.label.toLowerCase()}',
-      excludeSemantics: true,
-      child: DecoratedBox(
-        decoration: BoxDecoration(border: Border.all(color: ink, width: 1.6)),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _cell(
-              context,
-              'TITLE',
-              title.toUpperCase(),
-              size: 13,
-              spacing: 1.5,
-            ),
-            DecoratedBox(
+    return DecoratedBox(
+      decoration: BoxDecoration(border: Border.all(color: ink, width: 1.6)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _cell(context, 'TITLE', title.toUpperCase(), size: 13, spacing: 1.5),
+          Semantics(
+            container: true,
+            liveRegion: status == DraftingStatus.failed,
+            label: 'Sheet $sheet, ${status.label.toLowerCase()}',
+            excludeSemantics: true,
+            child: DecoratedBox(
               decoration: BoxDecoration(
                 border: Border(
                   top: BorderSide(color: context.sheet.fineRule, width: .7),
                 ),
               ),
-              child: SizedBox(
-                height: 22,
+              child: IntrinsicHeight(
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -247,19 +255,24 @@ class DraftingTitleBlock extends StatelessWidget {
                     Expanded(
                       flex: 5,
                       child: status == DraftingStatus.inProgress
-                          ? _cell(context, null, status.label)
+                          ? Center(child: _cell(context, null, status.label))
                           : Padding(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 4,
                               ),
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                child: _StatusStamp(
-                                  key: ValueKey(status),
-                                  label: status.label,
-                                  color: approved
-                                      ? context.sheet.approval
-                                      : context.sheet.stamp,
+                              child: Center(
+                                child: SizedBox(
+                                  height: 22,
+                                  child: FittedBox(
+                                    fit: BoxFit.scaleDown,
+                                    child: _StatusStamp(
+                                      key: ValueKey(status),
+                                      label: status.label,
+                                      color: approved
+                                          ? context.sheet.approval
+                                          : context.sheet.stamp,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ),
@@ -268,11 +281,44 @@ class DraftingTitleBlock extends StatelessWidget {
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+          if (goal case final goal?) _goalRow(context, goal),
+        ],
       ),
     );
   }
+
+  Widget _goalRow(BuildContext context, String goal) => DecoratedBox(
+    key: const ValueKey('puzzle-objective'),
+    decoration: BoxDecoration(
+      border: Border(top: BorderSide(color: context.sheet.fineRule, width: .7)),
+    ),
+    child: IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: _field(
+              context,
+              'GOAL',
+              Text(
+                goal,
+                style: draftingLettering(
+                  12,
+                  color: context.sheet.ink,
+                  spacing: .3,
+                ),
+              ),
+            ),
+          ),
+          if (goalAction case final action?) ...[
+            const DraftingCellDivider(width: .7),
+            Align(alignment: Alignment.topCenter, child: action),
+          ],
+        ],
+      ),
+    ),
+  );
 }
 
 class _StatusStamp extends StatelessWidget {

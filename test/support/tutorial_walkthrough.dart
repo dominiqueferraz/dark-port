@@ -92,9 +92,11 @@ Future<void> playTutorial(
       closeTo(viewportBounds.top + draftingGridMargins.top, .51),
     );
     final titleBlock = find.byType(DraftingTitleBlock);
+    expect(find.ancestor(of: details, matching: titleBlock), findsOneWidget);
+    expectFits(details, tester.getRect(titleBlock));
     expect(
-      tester.getRect(details).top - tester.getRect(titleBlock).bottom,
-      closeTo(6, .01),
+      tester.getRect(details).bottom,
+      closeTo(tester.getRect(titleBlock).bottom, .01),
     );
     expect(
       toolbarBounds.top - tester.getRect(readings).bottom,
@@ -105,7 +107,7 @@ Future<void> playTutorial(
       of: toolbarGroup,
       matching: find.byType(IconButton),
     );
-    expect(buttons, findsNWidgets(7));
+    expect(buttons, findsNWidgets(6));
     expect(
       find.descendant(of: toolbarGroup, matching: find.byTooltip('Settings')),
       findsOneWidget,
@@ -220,7 +222,6 @@ Future<void> playTutorial(
     expectFits(find.text(lesson.objective), pane);
     final titleBlock = find.byType(DraftingTitleBlock);
     expectFits(titleBlock, screen);
-    expect(find.ancestor(of: titleBlock, matching: details), findsNothing);
     expectFits(find.byType(DraftingPartRow).first, tester.getRect(readings));
     expectFits(find.byTooltip('Hint'), screen);
     expect(find.text(lesson.goal), findsNothing);
