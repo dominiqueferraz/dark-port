@@ -3,8 +3,10 @@ import 'dart:io';
 
 import 'package:path_provider/path_provider.dart';
 
+import 'assembly.dart';
 import 'endless_levels.dart';
 import 'game_save.dart';
+import 'splitter_blueprint.dart';
 import 'tutorial.dart';
 
 typedef EndlessResult = ({
@@ -21,10 +23,14 @@ class TutorialProgress {
     Map<String, GameSave> endlessBoards = const {},
     Map<String, EndlessResult> endlessResults = const {},
     Set<String> opened = const {},
+    Set<SplitterBlueprint> blueprints = const {},
+    Set<AssemblyBlueprint> assemblies = const {},
   }) : completed = Set.unmodifiable(completed),
        boards = Map.unmodifiable(boards),
        endlessBoards = Map.unmodifiable(endlessBoards),
        endlessResults = Map.unmodifiable(endlessResults),
+       blueprints = Set.unmodifiable(blueprints),
+       assemblies = Set.unmodifiable(assemblies),
        opened = Set.unmodifiable({
          ...opened,
          ...completed,
@@ -39,6 +45,8 @@ class TutorialProgress {
   final Map<String, GameSave> endlessBoards;
   final Map<String, EndlessResult> endlessResults;
   final Set<String> opened;
+  final Set<SplitterBlueprint> blueprints;
+  final Set<AssemblyBlueprint> assemblies;
 
   static TutorialLesson? _lessonFor(String id) =>
       lessonsById[id] ?? endlessLevelsByLessonId[id]?.lesson;
@@ -57,6 +65,40 @@ class TutorialProgress {
       endlessBoards: endlessBoards,
       endlessResults: endlessResults,
       opened: {...opened, lesson.id},
+      blueprints: blueprints,
+      assemblies: assemblies,
+    );
+  }
+
+  TutorialProgress saveBlueprint(SplitterBlueprint blueprint) {
+    if (blueprints.contains(blueprint)) return this;
+    return _saveLibrary(
+      blueprints: {...blueprints, blueprint},
+      assemblies: assemblies,
+    );
+  }
+
+  TutorialProgress saveAssembly(AssemblyBlueprint design) {
+    if (assemblies.contains(design)) return this;
+    return _saveLibrary(
+      blueprints: blueprints,
+      assemblies: {...assemblies, design},
+    );
+  }
+
+  TutorialProgress _saveLibrary({
+    required Set<SplitterBlueprint> blueprints,
+    required Set<AssemblyBlueprint> assemblies,
+  }) {
+    return TutorialProgress(
+      completed: completed,
+      boards: boards,
+      tutorialStarted: tutorialStarted,
+      endlessBoards: endlessBoards,
+      endlessResults: endlessResults,
+      opened: opened,
+      blueprints: blueprints,
+      assemblies: assemblies,
     );
   }
 
@@ -105,6 +147,8 @@ class TutorialProgress {
       endlessBoards: endlessBoards,
       endlessResults: endlessResults,
       opened: opened,
+      blueprints: blueprints,
+      assemblies: assemblies,
     );
   }
 
@@ -122,13 +166,20 @@ class TutorialProgress {
         star != null &&
         (previous?.stars.contains(star) != true ||
             (record && previous?.fourCableRecord != true));
-    if (saved?.solved == true && !newCredit) return this;
+    final fittedAssembly =
+        board.assemblyInstalled &&
+        board.solved &&
+        (saved?.assemblyInstalled != true || saved?.assembly != board.assembly);
+    final updateBoard = saved?.solved != true || fittedAssembly;
+    if (!updateBoard && !newCredit) return this;
     return TutorialProgress(
       completed: completed,
       boards: boards,
       tutorialStarted: tutorialStarted,
-      endlessBoards: {...endlessBoards, if (saved?.solved != true) id: board},
+      endlessBoards: {...endlessBoards, if (updateBoard) id: board},
       opened: opened,
+      blueprints: blueprints,
+      assemblies: assemblies,
       endlessResults: {
         ...endlessResults,
         if (newCredit)
@@ -146,6 +197,10 @@ class TutorialProgress {
     'completed': completed.toList(),
     'boards': boards.values.map((board) => board.toJson()).toList(),
     if (opened.isNotEmpty) 'opened': opened.toList(),
+    if (blueprints.isNotEmpty)
+      'blueprints': blueprints.map((blueprint) => blueprint.toJson()).toList(),
+    if (assemblies.isNotEmpty)
+      'assemblies': assemblies.map((design) => design.toJson()).toList(),
     if (!tutorialStarted) 'tutorialStarted': false,
     if (endlessBoards.isNotEmpty)
       'endlessBoards': endlessBoards.values
@@ -201,11 +256,25 @@ class TutorialProgress {
       tutorialStarted: started != false,
       opened: opened,
       endlessBoards: endless,
+      blueprints: _readBlueprints(json['blueprints'] ?? const []),
+      assemblies: _readAssemblies(json['assemblies'] ?? const []),
       endlessResults: _readEndlessResults(
         json['endlessResults'] ?? const {},
         endless,
       ),
     );
+  }
+
+  static Set<SplitterBlueprint> _readBlueprints(Object data) {
+    if (data is! List) {
+      throw const FormatException('Invalid Workbench library.');
+    }
+    return data.map(SplitterBlueprint.fromJson).toSet();
+  }
+
+  static Set<AssemblyBlueprint> _readAssemblies(Object data) {
+    if (data is! List) throw const FormatException('Invalid assembly library.');
+    return data.map(AssemblyBlueprint.fromJson).toSet();
   }
 
   static Map<String, EndlessResult> _readEndlessResults(

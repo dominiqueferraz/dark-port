@@ -57,20 +57,64 @@ class OpticalDeckGeometry {
   /// Clear paper kept between the bay wall and anything drawn inside it.
   static const _wallGap = 9.0;
 
-  Offset source(OpticalSource source) => project(source.foot);
+  Offset source(OpticalSource source) => _insetEndpoint(
+    project(source.foot),
+    heading(source.direction),
+    PartSymbols.sourceInk,
+    alongBeam: true,
+  );
 
   Offset receiver(int index) {
     final sensor = level.receivers[index];
-    final floor = level.floor;
-    final point = sensor.position;
-    if (point.x > floor.left &&
-        point.x < floor.right &&
-        point.y > floor.top &&
-        point.y < floor.bottom) {
-      return project(point);
+    return _insetEndpoint(
+      project(sensor.position),
+      heading(sensor.incoming),
+      PartSymbols.receiverInk,
+      alongBeam: false,
+    );
+  }
+
+  Offset _insetEndpoint(
+    Offset center,
+    Offset beam,
+    Rect ink, {
+    required bool alongBeam,
+  }) {
+    final paintBounds = MatrixUtils.transformRect(
+      Matrix4.rotationZ(beam.direction),
+      Rect.fromPoints(
+        ink.topLeft * endpointSize,
+        ink.bottomRight * endpointSize,
+      ),
+    ).inflate(1);
+    final paper = floorRect.deflate(_wallGap);
+    final safe = Rect.fromLTRB(
+      paper.left - paintBounds.left,
+      paper.top - paintBounds.top,
+      paper.right - paintBounds.right,
+      paper.bottom - paintBounds.bottom,
+    );
+    if (safe.isEmpty) return floorRect.center;
+
+    // Slide along the beam so its drawn path stays aligned with the glyph.
+    double entry(double value, double step, double low, double high) {
+      if (step == 0) return 0;
+      return ((step > 0 ? low : high) - value) / step;
     }
-    return project(point) -
-        heading(sensor.incoming) * (endpointSize * .22 + _wallGap);
+
+    final inward = alongBeam ? beam : -beam;
+    final distance = math.max(
+      0.0,
+      math.max(
+        entry(center.dx, inward.dx, safe.left, safe.right),
+        entry(center.dy, inward.dy, safe.top, safe.bottom),
+      ),
+    );
+    final moved = center + inward * distance;
+    return Offset(
+      moved.dx.clamp(safe.left, safe.right),
+      moved.dy.clamp(safe.top, safe.bottom),
+    );
   }
 
   Offset heading(BeamDirection direction) {
@@ -581,6 +625,8 @@ class _OpticalDrawing extends CustomPainter {
           turned: optic.turned,
           fixed: optic.fixed,
           opacity: opacity,
+          fitted: optic.blueprint != null,
+          mark: optic.blueprint?.mark.icon,
         ),
         style,
       );
@@ -592,7 +638,10 @@ class _OpticalDrawing extends CustomPainter {
     final radius = geometry.glyphSize * 1.75;
     final lettering = (geometry.glyphSize * .75).clamp(8.0, 11.0);
     for (final optic in _placed) {
-      if (optic.converter != null) continue;
+      if (optic.kind == OpticKind.workbenchSplitter ||
+          optic.converter != null) {
+        continue;
+      }
       final center = geometry.project(optic.position);
       final mirror = _diagonal(optic, 1).direction;
       for (final incoming in trace.segments) {

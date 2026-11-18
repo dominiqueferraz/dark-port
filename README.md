@@ -6,7 +6,13 @@ The required path starts with **First reflection**, **A divided beam** and **The
 
 The first time you open a tutorial lesson, a bubble explains its goal and controls. Tap **Start lesson** to play. The game remembers which lessons you’ve opened, and **Hint** shows the guidance whenever you need it.
 
-**Endless** opens the group path. Select group **1**, **Signal Routing**, to open its puzzle path from **1.1** to **1.20**. All 20 puzzles are playable and save their progress separately from the tutorial. **Edge of Coverage** branches below **Antenna Test**. Each distinct winning route earns a Solution Star, and **Night Lights** also tracks a four-cable record. See the [Endless level register](endless-level-register.md) for the fixtures and solution checks.
+**Endless** opens the group path. Select group **1**, **Signal Routing**, to open its puzzle path from **1.1** to **1.28**. Puzzles save their progress separately from the tutorial. **Edge of Coverage** branches below **Antenna Test**. Each distinct winning route earns a Solution Star, and **Night Lights** also tracks a four-cable record. See the [Endless level register](endless-level-register.md) for the fixtures and solution checks.
+
+Open **Workbench** from the title screen or a compatible puzzle. Choose **Add part** or tap an empty mount to pick an optical splitter or a wired module. Select a part or socket to turn it with the same controls, and open **Blueprints** to preview and load either kind of design. Use **Tutorial** to learn how to aim an optical splitter at a latch.
+
+Fabrication puzzles open with an empty socket marked **Fabrication required**. Open **Workbench** to build a part, or use **Insert part** to choose a compatible saved design. **Save blueprint** lets you name the part and pick an icon. **Fit to puzzle** installs it as one part so the level can test its signals.
+
+For a splitter, aim the test laser and press **Test** to check the input’s sightline and read the power at each output. Clip a half-power filter to either output. For a wired assembly, drag parts between mounts, fit up to three inputs and three outputs with the perimeter plus buttons, and tap an output followed by an input to connect them. Tap a test input in the parts list to toggle its feed. In Signal Routing, **Workbench sheets** jumps to the build puzzles.
 
 **Achievements** on the title screen lists earned and unearned awards with their conditions. Tap the trophy beside the Night Lights stars to inspect its four-cable achievement.
 
@@ -32,9 +38,9 @@ The same `flutter run -d <device-id>` command targets a booted iOS simulator or 
 
 ## Verify
 
-Run `flutter analyze` and `flutter test`. The checks cover the full tutorial and optional branch, unlocking and replay, interrupted alarms, legacy saves, serialized file writes and write retries. The Endless tests exercise levels 1.1–1.20 and enumerate every authored arrangement for 1.11–1.20.
+Run `flutter analyze` and `flutter test`. The checks cover the full tutorial and optional branch, unlocking and replay, interrupted alarms, legacy saves, serialized file writes and write retries. The Endless tests exercise levels 1.1–1.20, enumerate every authored arrangement for 1.11–1.20, exhaust the legal optical Workbench arrangements on 1.21–1.26, and verify insertion, blueprint reuse, and alternative wired designs on 1.27–1.28.
 
-Run `flutter test integration_test/onboarding_test.dart -d <device-id>` for the native tutorial walkthrough or `flutter test integration_test/endless_test.dart -d <device-id>` for the Endless walkthrough. Both exercise local save storage.
+Run the walkthroughs in `integration_test/` with `flutter test <test-file> -d <device-id>`. Use `onboarding_test.dart` for the Tutorial, `endless_test.dart` for Signal Routing, or `workbench_test.dart` for the Workbench tutorial and blueprint reuse. All three exercise local save storage.
 
 ## Design references
 

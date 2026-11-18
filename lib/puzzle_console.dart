@@ -75,6 +75,7 @@ class PuzzleConsole extends StatelessWidget {
     required this.navigation,
     required this.tools,
     required this.playfield,
+    this.gridBounds,
     required this.readings,
     required this.solved,
     this.failureMessage,
@@ -88,6 +89,7 @@ class PuzzleConsole extends StatelessWidget {
   final PuzzleNavigation navigation;
   final ConsoleTools tools;
   final Widget playfield;
+  final Rect Function(Size size)? gridBounds;
   final Widget readings;
   final Widget? inventory;
   final bool solved;
@@ -365,26 +367,14 @@ class PuzzleConsole extends StatelessWidget {
     );
   }
 
-  Widget _titleBlock(BuildContext context) => Semantics(
-    key: solved ? const ValueKey('lesson-complete') : null,
-    liveRegion: solved,
-    label: solved ? 'Complete' : null,
-    child: DraftingTitleBlock(
-      title: brief.title,
-      sheet: brief.sheet!,
-      goal: _objectiveText,
-      goalAction: _hintBesideGoal
-          ? SizedBox.square(
-              dimension: 36,
-              child: _hintButton(context, iconSize: 16),
-            )
-          : null,
-      status: switch ((solved, failureMessage != null)) {
-        (_, true) => DraftingStatus.failed,
-        (true, false) => DraftingStatus.approved,
-        _ => DraftingStatus.inProgress,
-      },
-    ),
+  Widget _titleBlock(BuildContext context) => PuzzleTitleBlock(
+    brief: brief,
+    canHint: canLeave,
+    status: switch ((solved, failureMessage != null)) {
+      (_, true) => DraftingStatus.failed,
+      (true, false) => DraftingStatus.approved,
+      _ => DraftingStatus.inProgress,
+    },
   );
 
   Widget _blueprint(BuildContext context) {
@@ -393,23 +383,36 @@ class PuzzleConsole extends StatelessWidget {
     return Stack(
       children: [
         playfield,
-        Positioned(
-          left: draftingGridMargins.left + brief.awardBounds.left,
-          top: draftingGridMargins.top + brief.awardBounds.top,
-          child: Material(
-            key: const ValueKey('blueprint-awards'),
-            color: sheet.paper,
-            shape: RoundedRectangleBorder(
-              side: BorderSide(color: sheet.ink, width: .9),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                if (brief.stars.isNotEmpty) _starButton(context),
-                for (final achievement in brief.achievements)
-                  _achievementButton(context, achievement),
-              ],
-            ),
+        Positioned.fill(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final size = constraints.biggest;
+              final grid =
+                  gridBounds?.call(size) ??
+                  draftingGridMargins.deflateRect(Offset.zero & size);
+              final origin = grid.topLeft + brief.awardBounds.topLeft;
+              return Align(
+                alignment: Alignment.topLeft,
+                child: Padding(
+                  padding: EdgeInsets.only(left: origin.dx, top: origin.dy),
+                  child: Material(
+                    key: const ValueKey('blueprint-awards'),
+                    color: sheet.paper,
+                    shape: RoundedRectangleBorder(
+                      side: BorderSide(color: sheet.ink, width: .9),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (brief.stars.isNotEmpty) _starButton(context),
+                        for (final achievement in brief.achievements)
+                          _achievementButton(context, achievement),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -575,91 +578,133 @@ class PuzzleConsole extends StatelessWidget {
     icon: Icon(Icons.lightbulb_outline, size: iconSize),
   );
 
-  void _showHint(BuildContext context) {
-    final sheet = context.sheet;
-    final hasStars = brief.stars.isNotEmpty;
-    Text heading(String text) => Text(
-      text,
-      style: draftingLettering(10, color: sheet.faint, spacing: 1.6),
-    );
-    TextStyle body(double size) =>
-        draftingLettering(size, color: sheet.ink, spacing: .3);
-    showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: sheet.paper,
-        insetPadding: hasStars
-            ? const EdgeInsets.symmetric(horizontal: 40, vertical: 16)
-            : null,
-        iconPadding: hasStars ? const EdgeInsets.fromLTRB(24, 14, 24, 2) : null,
-        contentPadding: hasStars
-            ? const EdgeInsets.fromLTRB(24, 8, 24, 8)
-            : null,
-        shape: RoundedRectangleBorder(
-          side: BorderSide(color: sheet.ink, width: 1.6),
-        ),
-        scrollable: true,
-        icon: Icon(Icons.lightbulb_outline, color: sheet.ink),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (brief.goal case final goal?) ...[
-              heading('GOAL'),
-              const SizedBox(height: 6),
-              Text(goal, style: body(14)),
-              if (brief.notes.isNotEmpty) const SizedBox(height: 16),
-            ],
-            if (brief.notes.isNotEmpty) ...[
-              heading('HOW IT WORKS'),
-              const SizedBox(height: 6),
-              for (final note in brief.notes)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('–  ', style: body(13)),
-                      Expanded(child: Text(note, style: body(13))),
-                    ],
-                  ),
+  void _showHint(BuildContext context) => _showPuzzleHint(context, brief);
+}
+
+class PuzzleTitleBlock extends StatelessWidget {
+  const PuzzleTitleBlock({
+    super.key,
+    required this.brief,
+    required this.status,
+    this.canHint = true,
+  });
+
+  final PuzzleBrief brief;
+  final DraftingStatus status;
+  final bool canHint;
+
+  @override
+  Widget build(BuildContext context) {
+    final solved = status == DraftingStatus.approved;
+    final objective = brief.objective ?? brief.goal;
+    return Semantics(
+      key: solved ? const ValueKey('lesson-complete') : null,
+      liveRegion: solved,
+      label: solved ? 'Complete' : null,
+      child: DraftingTitleBlock(
+        title: brief.title,
+        sheet: brief.sheet!,
+        goal: objective,
+        goalAction: objective == null
+            ? null
+            : SizedBox.square(
+                dimension: 36,
+                child: consoleButton(
+                  tooltip: 'Hint',
+                  onPressed: brief.hasHint && canHint
+                      ? () => _showPuzzleHint(context, brief)
+                      : null,
+                  icon: const Icon(Icons.lightbulb_outline, size: 16),
                 ),
-            ],
-            if (brief.stars.isNotEmpty) ...[
-              if (brief.goal != null || brief.notes.isNotEmpty)
-                Divider(
-                  key: const ValueKey('solution-stars-divider'),
-                  height: 24,
-                  thickness: 1,
-                  color: sheet.ink,
-                ),
-              heading('SOLUTION STARS'),
-              const SizedBox(height: 8),
-              for (final star in brief.stars)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: Row(
-                    spacing: 8,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SolutionStarIcon(earned: star.earned, size: 18),
-                      Expanded(child: Text(star.condition, style: body(13))),
-                    ],
-                  ),
-                ),
-            ],
-          ],
-        ),
-        actions: [
-          consoleButton(
-            tooltip: 'Close hint',
-            onPressed: () => Navigator.of(context).pop(),
-            icon: const Icon(Icons.close),
-          ),
-        ],
+              ),
+        status: status,
       ),
     );
   }
+}
+
+void _showPuzzleHint(BuildContext context, PuzzleBrief brief) {
+  final sheet = context.sheet;
+  final hasStars = brief.stars.isNotEmpty;
+  Text heading(String text) => Text(
+    text,
+    style: draftingLettering(10, color: sheet.faint, spacing: 1.6),
+  );
+  TextStyle body(double size) =>
+      draftingLettering(size, color: sheet.ink, spacing: .3);
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      backgroundColor: sheet.paper,
+      insetPadding: hasStars
+          ? const EdgeInsets.symmetric(horizontal: 40, vertical: 16)
+          : null,
+      iconPadding: hasStars ? const EdgeInsets.fromLTRB(24, 14, 24, 2) : null,
+      contentPadding: hasStars ? const EdgeInsets.fromLTRB(24, 8, 24, 8) : null,
+      shape: RoundedRectangleBorder(
+        side: BorderSide(color: sheet.ink, width: 1.6),
+      ),
+      scrollable: true,
+      icon: Icon(Icons.lightbulb_outline, color: sheet.ink),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (brief.goal case final goal?) ...[
+            heading('GOAL'),
+            const SizedBox(height: 6),
+            Text(goal, style: body(14)),
+            if (brief.notes.isNotEmpty) const SizedBox(height: 16),
+          ],
+          if (brief.notes.isNotEmpty) ...[
+            heading('HOW IT WORKS'),
+            const SizedBox(height: 6),
+            for (final note in brief.notes)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('–  ', style: body(13)),
+                    Expanded(child: Text(note, style: body(13))),
+                  ],
+                ),
+              ),
+          ],
+          if (brief.stars.isNotEmpty) ...[
+            if (brief.goal != null || brief.notes.isNotEmpty)
+              Divider(
+                key: const ValueKey('solution-stars-divider'),
+                height: 24,
+                thickness: 1,
+                color: sheet.ink,
+              ),
+            heading('SOLUTION STARS'),
+            const SizedBox(height: 8),
+            for (final star in brief.stars)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  spacing: 8,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SolutionStarIcon(earned: star.earned, size: 18),
+                    Expanded(child: Text(star.condition, style: body(13))),
+                  ],
+                ),
+              ),
+          ],
+        ],
+      ),
+      actions: [
+        consoleButton(
+          tooltip: 'Close hint',
+          onPressed: () => Navigator.of(context).pop(),
+          icon: const Icon(Icons.close),
+        ),
+      ],
+    ),
+  );
 }
 
 class _FailureNotice extends StatelessWidget {

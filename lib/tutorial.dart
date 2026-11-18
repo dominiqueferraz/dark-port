@@ -1,3 +1,4 @@
+import 'assembly.dart';
 import 'optical_bay.dart';
 import 'signal_board.dart';
 import 'wired_boards.dart';
@@ -49,6 +50,19 @@ class WiredLesson extends TutorialLesson {
   });
 
   final SignalBoard board;
+}
+
+class AssemblyLesson extends TutorialLesson {
+  const AssemblyLesson(
+    super.id,
+    this.fixture, {
+    required super.title,
+    required super.objective,
+    required super.goal,
+    super.notes,
+  });
+
+  final AssemblyFixture fixture;
 }
 
 final firstReflection = OpticalLesson(

@@ -4,6 +4,18 @@ import 'package:flutter/material.dart';
 
 import 'optical_bay.dart';
 import 'sheet_style.dart';
+import 'workbench_part_mark.dart';
+
+extension WorkbenchIconSymbol on WorkbenchIcon {
+  IconData get symbol => switch (this) {
+    WorkbenchIcon.bolt => Icons.bolt,
+    WorkbenchIcon.prism => Icons.change_history,
+    WorkbenchIcon.compass => Icons.explore_outlined,
+    WorkbenchIcon.spark => Icons.auto_awesome,
+    WorkbenchIcon.shield => Icons.shield_outlined,
+    WorkbenchIcon.gear => Icons.settings_outlined,
+  };
+}
 
 /// One optic as the drawing needs to show it.
 class OpticGlyph {
@@ -14,6 +26,8 @@ class OpticGlyph {
     required this.turned,
     required this.fixed,
     this.opacity = 1,
+    this.fitted = false,
+    this.mark,
   });
 
   final Offset center;
@@ -22,6 +36,8 @@ class OpticGlyph {
   final bool turned;
   final bool fixed;
   final double opacity;
+  final bool fitted;
+  final WorkbenchIcon? mark;
 
   /// Half the reflecting face, from the centre toward one end.
   Offset get face => Offset(radius * .62, radius * (turned ? .62 : -.62));
@@ -37,13 +53,58 @@ class OpticGlyph {
 abstract class PartSymbols {
   const PartSymbols();
 
+  /// Ink extents, in symbol-size units from the centre, before rotation.
+  /// Include all three symbol sets and both receiver shapes.
+  static const sourceInk = Rect.fromLTRB(-.32, -.20, .20, .20);
+  static const receiverInk = Rect.fromLTRB(-.24, -.28, .22, .28);
+
   String get id;
   String get name;
 
   /// One line on what sets these signs apart.
   String get description;
 
-  void paintOptic(Canvas canvas, OpticGlyph optic, SheetStyle style);
+  void paintOptic(Canvas canvas, OpticGlyph optic, SheetStyle style) {
+    if (optic.kind != OpticKind.workbenchSplitter) {
+      _paintStockOptic(canvas, optic, style);
+      return;
+    }
+    final c = optic.center;
+    final r = optic.radius;
+    final ink = _faded(style.ink, optic.opacity);
+    final housing = Path()
+      ..addPolygon([
+        c + Offset(0, -r),
+        c + Offset(r, 0),
+        c + Offset(0, r),
+        c + Offset(-r, 0),
+      ], true);
+    canvas.drawPath(housing, _fill(style.paper));
+    canvas.drawPath(housing, _stroke(ink, 1.3));
+    if (optic.mark case final mark?) {
+      final symbol = mark.symbol;
+      final glyph = TextPainter(
+        text: TextSpan(
+          text: String.fromCharCode(symbol.codePoint),
+          style: TextStyle(
+            color: ink,
+            fontSize: r * 1.25,
+            fontFamily: symbol.fontFamily,
+            package: symbol.fontPackage,
+          ),
+        ),
+        textDirection: TextDirection.ltr,
+      )..layout();
+      glyph.paint(canvas, c - Offset(glyph.width / 2, glyph.height / 2));
+      glyph.dispose();
+    } else if (optic.fitted) {
+      canvas.drawCircle(c, r * .36, _fill(ink));
+    } else {
+      canvas.drawCircle(c, r * .36, _stroke(ink, .9));
+    }
+  }
+
+  void _paintStockOptic(Canvas canvas, OpticGlyph optic, SheetStyle style);
   void paintSource(Canvas canvas, Size size, SheetStyle style);
   void paintReceiver(
     Canvas canvas,
@@ -104,6 +165,7 @@ abstract class PartSymbols {
       all.firstWhere((symbols) => symbols.id == id, orElse: () => fallback);
 }
 
+/// An optical symbol drawn with the current sheet and symbol choices.
 class ConverterSymbol extends StatelessWidget {
   const ConverterSymbol({
     super.key,
@@ -186,7 +248,6 @@ class _ConverterDrawing extends CustomPainter {
       sheet != oldDelegate.sheet;
 }
 
-/// An optical symbol drawn with the current sheet and symbol choices.
 class OpticalPartSymbol extends StatelessWidget {
   const OpticalPartSymbol.source({super.key})
     : kind = null,
@@ -194,7 +255,9 @@ class OpticalPartSymbol extends StatelessWidget {
       turned = false,
       fixed = false,
       lit = false,
-      alarm = false;
+      alarm = false,
+      mark = null,
+      fitted = false;
 
   const OpticalPartSymbol.receiver({
     super.key,
@@ -203,13 +266,17 @@ class OpticalPartSymbol extends StatelessWidget {
   }) : kind = null,
        receiver = true,
        turned = false,
-       fixed = false;
+       fixed = false,
+       mark = null,
+       fitted = false;
 
   const OpticalPartSymbol.optic(
     OpticKind this.kind, {
     super.key,
     this.turned = false,
     this.fixed = false,
+    this.fitted = false,
+    this.mark,
   }) : receiver = false,
        lit = false,
        alarm = false;
@@ -220,6 +287,8 @@ class OpticalPartSymbol extends StatelessWidget {
   final bool fixed;
   final bool lit;
   final bool alarm;
+  final bool fitted;
+  final WorkbenchIcon? mark;
 
   @override
   Widget build(BuildContext context) =>
@@ -245,6 +314,8 @@ class _OpticalPartPainter extends CustomPainter {
           kind: kind,
           turned: part.turned,
           fixed: part.fixed,
+          fitted: part.fitted,
+          mark: part.mark,
         ),
         style,
       );
@@ -328,7 +399,7 @@ class DraftingSymbols extends PartSymbols {
   }
 
   @override
-  void paintOptic(Canvas canvas, OpticGlyph optic, SheetStyle style) {
+  void _paintStockOptic(Canvas canvas, OpticGlyph optic, SheetStyle style) {
     final center = optic.center;
     final radius = optic.radius;
     final ink = _faded(style.ink, optic.opacity);
@@ -494,7 +565,7 @@ class SchematicSymbols extends PartSymbols {
   }
 
   @override
-  void paintOptic(Canvas canvas, OpticGlyph optic, SheetStyle style) {
+  void _paintStockOptic(Canvas canvas, OpticGlyph optic, SheetStyle style) {
     final center = optic.center;
     final r = optic.radius;
     final ink = _faded(style.ink, optic.opacity);
@@ -669,7 +740,7 @@ class PictogramSymbols extends PartSymbols {
   }
 
   @override
-  void paintOptic(Canvas canvas, OpticGlyph optic, SheetStyle style) {
+  void _paintStockOptic(Canvas canvas, OpticGlyph optic, SheetStyle style) {
     final center = optic.center;
     final r = optic.radius;
     final ink = _faded(style.ink, optic.opacity);

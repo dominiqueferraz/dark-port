@@ -14,10 +14,12 @@ class DraftingScaffold extends StatelessWidget {
     super.key,
     required this.child,
     this.balanceVerticalInsets = false,
+    this.resizeToAvoidBottomInset = true,
   });
 
   final Widget child;
   final bool balanceVerticalInsets;
+  final bool resizeToAvoidBottomInset;
 
   EdgeInsets _minimumInsets(BuildContext context) {
     if (!balanceVerticalInsets ||
@@ -38,6 +40,7 @@ class DraftingScaffold extends StatelessWidget {
       value: overlays.copyWith(systemNavigationBarColor: sheet.paper),
       child: Scaffold(
         backgroundColor: sheet.paper,
+        resizeToAvoidBottomInset: resizeToAvoidBottomInset,
         body: DraftingPaper(
           child: SafeArea(minimum: _minimumInsets(context), child: child),
         ),
@@ -90,50 +93,78 @@ class ConsoleHeader extends StatelessWidget {
     this.caption,
     this.onBack,
     this.backLabel = 'Return to title',
+    this.action,
   });
 
   final String title;
   final String? caption;
   final VoidCallback? onBack;
   final String backLabel;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
     final sheet = context.sheet;
+    final heading = Semantics(
+      header: true,
+      child: Text(title, style: draftingLettering(16, spacing: 3)),
+    );
+    final subtitle = caption == null
+        ? null
+        : Text(
+            caption!,
+            style: draftingLettering(10, color: sheet.faint, spacing: 1.6),
+          );
     return Container(
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: sheet.ink, width: 1.2)),
       ),
       constraints: const BoxConstraints(minHeight: 48),
       padding: const EdgeInsets.only(bottom: 6),
-      child: Row(
-        children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              border: Border.all(color: sheet.ink, width: .9),
-            ),
-            child: SizedBox.fromSize(
-              size: consoleButtonSize,
-              child: consoleButton(
-                tooltip: backLabel,
-                onPressed: onBack,
-                icon: const Icon(Icons.arrow_back),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 520;
+          return Row(
+            children: [
+              DecoratedBox(
+                decoration: BoxDecoration(
+                  border: Border.all(color: sheet.ink, width: .9),
+                ),
+                child: SizedBox.fromSize(
+                  size: consoleButtonSize,
+                  child: consoleButton(
+                    tooltip: backLabel,
+                    onPressed: onBack,
+                    icon: const Icon(Icons.arrow_back),
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Semantics(
-              header: true,
-              child: Text(title, style: draftingLettering(16, spacing: 3)),
-            ),
-          ),
-          if (caption case final caption?)
-            Text(
-              caption,
-              style: draftingLettering(10, color: sheet.faint, spacing: 1.6),
-            ),
-        ],
+              const SizedBox(width: 12),
+              Expanded(
+                child: compact && subtitle != null
+                    ? Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [heading, subtitle],
+                      )
+                    : heading,
+              ),
+              if (action case final action?) ...[
+                const SizedBox(width: 8),
+                ConstrainedBox(
+                  constraints: BoxConstraints(
+                    maxWidth: constraints.maxWidth * .55,
+                  ),
+                  child: action,
+                ),
+              ],
+              if (!compact && subtitle != null) ...[
+                const SizedBox(width: 8),
+                subtitle,
+              ],
+            ],
+          );
+        },
       ),
     );
   }

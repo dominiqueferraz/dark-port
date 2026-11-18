@@ -35,7 +35,7 @@ class EndlessGroups extends StatelessWidget {
   );
 }
 
-class EndlessPicker extends StatelessWidget {
+class EndlessPicker extends StatefulWidget {
   const EndlessPicker({
     super.key,
     required this.group,
@@ -52,15 +52,30 @@ class EndlessPicker extends StatelessWidget {
   final EndlessLevel? focus;
 
   @override
+  State<EndlessPicker> createState() => _EndlessPickerState();
+}
+
+class _EndlessPickerState extends State<EndlessPicker> {
+  int _workbenchJumps = 0;
+
+  @override
   Widget build(BuildContext context) {
+    final group = widget.group;
     final levels = group.levels;
     final byNumber = {for (final level in levels) level.number: level};
     return _EndlessRegister(
       title: group.title.toUpperCase(),
       caption: 'GROUP ${group.number}',
       backLabel: 'Back to Endless groups',
-      onBack: onBack,
+      onBack: widget.onBack,
+      action: group == EndlessGroup.signalRouting
+          ? TextButton(
+              onPressed: () => setState(() => _workbenchJumps++),
+              child: const Text('Workbench sheets'),
+            )
+          : null,
       path: DrawingPath(
+        key: ValueKey(_workbenchJumps),
         scrollKey: const ValueKey('endless-level-line'),
         main: levels.where((level) => level.variantOf == null).toList(),
         branches: {
@@ -68,15 +83,15 @@ class EndlessPicker extends StatelessWidget {
             if (level.variantOf case final parent?) level: byNumber[parent]!,
         },
         entries: {for (final level in levels) level: _entry(level)},
-        focus: focus,
+        focus: _workbenchJumps == 0 ? widget.focus : EndlessLevel.diagonalLatch,
       ),
     );
   }
 
   DrawingPathEntry _entry(EndlessLevel level) {
     final unlocked = level.lesson != null;
-    final saved = progress?.endlessBoards[level.lesson?.id];
-    final result = progress?.resultFor(level);
+    final saved = widget.progress?.endlessBoards[level.lesson?.id];
+    final result = widget.progress?.resultFor(level);
     final complete = saved?.solved == true;
     final (status, icon) = !unlocked
         ? ('Planned', Icons.lock_outline)
@@ -86,6 +101,7 @@ class EndlessPicker extends StatelessWidget {
         ? ('Resume', Icons.play_circle_outline)
         : ('Start', Icons.play_arrow);
     final parent = level.variantOf;
+    final group = widget.group;
     final number = group.sheetNumber(level);
     return DrawingPathEntry(
       key: ValueKey('endless-$number'),
@@ -94,7 +110,7 @@ class EndlessPicker extends StatelessWidget {
       kind: parent == null ? 'PUZZLE' : 'VARIANT',
       status: status,
       icon: icon,
-      onOpen: unlocked ? () => onOpen(level) : null,
+      onOpen: unlocked ? () => widget.onOpen(level) : null,
       branchHint: parent == null ? null : 'Variant of ${group.number}.$parent',
       stars: level.starsFor(result?.stars ?? const {}),
       current: unlocked && !complete && parent == null,
@@ -110,11 +126,13 @@ class _EndlessRegister extends StatelessWidget {
     required this.path,
     this.caption,
     this.backLabel = 'Return to title',
+    this.action,
   });
 
   final String title;
   final VoidCallback onBack;
   final Widget path;
+  final Widget? action;
   final String? caption;
   final String backLabel;
 
@@ -129,6 +147,7 @@ class _EndlessRegister extends StatelessWidget {
             caption: caption,
             backLabel: backLabel,
             onBack: onBack,
+            action: action,
           ),
           const SizedBox(height: 12),
           Expanded(child: path),

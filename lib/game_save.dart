@@ -1,8 +1,10 @@
+import 'assembly.dart';
 import 'endless_levels.dart';
 import 'optical_bay.dart';
 import 'placement_nodes.dart';
 import 'signal_board.dart';
 import 'signal_board_state.dart';
+import 'splitter_blueprint.dart';
 import 'tutorial.dart';
 import 'wired_boards.dart';
 
@@ -15,10 +17,18 @@ class GameSave {
     Set<String>? flipped,
     Map<String, int> losses = const {},
     Map<SignalLink, LeadType> leadTypes = const {},
+    AssemblyBlueprint? assembly,
+    bool assemblyInstalled = false,
   }) {
+    if (lesson is AssemblyLesson &&
+        assembly != null &&
+        !lesson.fixture.accepts(assembly)) {
+      throw ArgumentError('Assembly does not fit this sheet.');
+    }
     final wired = switch (lesson) {
       WiredLesson(:final board) => board,
       OpticalLesson(:final wiredBoard) => wiredBoard,
+      AssemblyLesson() => null,
     };
     final optics = List<Optic>.unmodifiable(
       layout ?? (lesson is OpticalLesson ? lesson.board.initial : const []),
@@ -44,6 +54,14 @@ class GameSave {
       positions: Map.unmodifiable(positions ?? const {}),
       flipped: Set.unmodifiable(flipped ?? const {}),
       losses: Map.unmodifiable(losses),
+      assembly: lesson is AssemblyLesson
+          ? (assembly ?? AssemblyBlueprint.blank).withJacks(
+              lesson.fixture.feeds.length,
+              lesson.fixture.targets.length,
+            )
+          : null,
+      assemblyInstalled:
+          assemblyInstalled && lesson is AssemblyLesson && assembly != null,
     );
   }
 
@@ -56,6 +74,7 @@ class GameSave {
       identical(switch (lesson) {
         WiredLesson(:final board) => board,
         OpticalLesson(:final wiredBoard) => wiredBoard,
+        AssemblyLesson() => null,
       }, state.board),
     );
     return GameSave._wired(
@@ -89,6 +108,8 @@ class GameSave {
     required this.flipped,
     required this.losses,
     this.signal,
+    this.assembly,
+    this.assemblyInstalled = false,
   });
 
   final TutorialLesson lesson;
@@ -98,6 +119,8 @@ class GameSave {
   };
   SignalBoard? get wiredBoard => signal?.board;
   final SignalBoardState? signal;
+  final AssemblyBlueprint? assembly;
+  final bool assemblyInstalled;
   final List<Optic> layout;
   final List<SignalLink> links;
   final Map<String, SignalPoint> positions;
@@ -111,10 +134,18 @@ class GameSave {
     final level? => traceOptics(level, layout).solves(level),
     null => true,
   };
-  bool get solved => opticsSolved && (signal?.solved ?? true);
+  bool get solved => switch (lesson) {
+    AssemblyLesson(:final fixture) =>
+      assemblyInstalled && fixture.solves(assembly!),
+    _ => opticsSolved && (signal?.solved ?? true),
+  };
 
   Map<String, Object> toJson() => {
     'board': lesson.id,
+    if (assembly case final design?) ...{
+      'assembly': design.toJson(),
+      'assemblyInstalled': assemblyInstalled,
+    },
     if (wiredBoard != null) ...{
       'flipped': flipped.toList(),
       'losses': losses,
@@ -141,6 +172,8 @@ class GameSave {
             'x': optic.position.x,
             'y': optic.position.y,
             'turned': optic.turned,
+            if (optic.blueprint case final blueprint?)
+              'blueprint': blueprint.toJson(),
           },
       ],
   };
@@ -156,6 +189,11 @@ class GameSave {
               : _readSignalState(lesson.wiredBoard!, json),
         ),
         final WiredLesson lesson => _readWiredSave(lesson, json),
+        final AssemblyLesson lesson => _readAssemblySave(
+          lesson,
+          json['assembly'],
+          installed: json['assemblyInstalled'],
+        ),
         null => throw const FormatException('Unknown lesson.'),
       };
     }
@@ -172,6 +210,31 @@ class GameSave {
       _ => throw const FormatException('Unknown legacy board.'),
     };
     return _readOpticalSave(lesson, json['layout'], verified: json['verified']);
+  }
+
+  static GameSave _readAssemblySave(
+    AssemblyLesson lesson,
+    Object? data, {
+    required Object? installed,
+  }) {
+    if (installed != null && installed is! bool) {
+      throw const FormatException('Invalid fitted assembly flag.');
+    }
+    final fixture = lesson.fixture;
+    var design = AssemblyBlueprint.fromJson(data);
+    if (installed == null &&
+        design.fits(fixture.feeds.length, fixture.targets.length)) {
+      design = design.withJacks(fixture.feeds.length, fixture.targets.length);
+    }
+    if (!fixture.accepts(design)) {
+      throw const FormatException('Assembly does not fit this sheet.');
+    }
+    return GameSave(
+      lesson,
+      assembly: design,
+      // Before insertion was required, a working saved draft completed the sheet.
+      assemblyInstalled: installed is bool ? installed : fixture.solves(design),
+    );
   }
 
   static GameSave _readOpticalSave(
@@ -210,12 +273,20 @@ class GameSave {
       if (!p.x.isFinite || !p.y.isFinite) {
         throw const FormatException('Invalid position.');
       }
+      SplitterBlueprint? blueprint;
+      if (entry.containsKey('blueprint')) {
+        blueprint = SplitterBlueprint.fromJson(entry['blueprint']);
+        if (template.fabricationSocket?.accepts(blueprint) != true) {
+          throw const FormatException('This optic cannot fit a blueprint.');
+        }
+      }
       byId[template.id] = Optic(
         template.id,
         template.kind,
         p,
         turned: entry['turned'] as bool,
         fixed: template.fixed,
+        blueprint: blueprint,
         converter: template.converter,
       );
     }

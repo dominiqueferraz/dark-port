@@ -1,6 +1,6 @@
 # Dark Port Endless Level Register
 
-This register specifies the first 20 levels of the signal-routing pack. Each entry records the winning conditions, the route the board is meant to teach, the failures to reproduce, and the target number of distinct solutions. The reference fixtures in Appendix A have exhaustive counts under their stated rules. The app proofs count solutions using the playable fixtures and evaluators. Use the [product requirements](prd.md) for the station loop and the existing [wired](prd.md#wired-signals) and [optical](prd.md#light) conventions.
+This register specifies the first 28 levels of the signal-routing pack. Each entry records the winning conditions, the route the board is meant to teach, the failures to reproduce, and the target number of distinct solutions. The reference fixtures in Appendix A have exhaustive counts under their stated rules. The app proofs count solutions using the playable fixtures and evaluators. Use the [product requirements](prd.md) for the station loop and the existing [wired](prd.md#wired-signals) and [optical](prd.md#light) conventions.
 
 ## Signal rules
 
@@ -66,7 +66,29 @@ Remove each candidate spare from the fixture and rerun the replays and failure c
 
 ### Group path
 
-The Endless group path lists **Signal Routing** as group **1**. Selecting it opens a separate path with boards numbered **1.1** through **1.20**. E02 **Edge of Coverage** is an optional branch off E01 **Antenna Test** because it reuses the two-mark fixture and adds a channel decoy. The main line goes from E01 to E03. E05 stays on the main line because it introduces attenuation as a solve constraint. E04 and E18 list different routes through their respective boards, so each has one entry on the line. All 20 sheets are playable.
+The Endless group path lists **Signal Routing** as group **1**. Selecting it opens a separate path with boards numbered **1.1** through **1.28**. E02 **Edge of Coverage** is an optional branch off E01 **Antenna Test** because it reuses the two-mark fixture and adds a channel decoy. The main line goes from E01 to E03. E05 stays on the main line because it introduces attenuation as a solve constraint. E04 and E18 list different routes through their respective boards, so each has one entry on the line. All 28 sheets are playable. The **Workbench sheets** shortcut jumps to E21.
+
+### Workbench sheets
+
+Each sheet has one Workbench socket with two ports, a 100 u laser, and latches with exact power and approach requirements. The starting beam stops at the empty socket, and the latches report zero until a fitted part sends light to them. Tests run all 30 blueprints, both orientations, every authored mount, and the empty socket through the game evaluator. Each sheet has one effective route. E21–E25 award the `custom-split` Solution Star, and E26 awards `filtered-branch`.
+
+| Sheet | Winning split | Fixture check |
+| --- | --- | --- |
+| E21 **Diagonal Latch** | 0° and +45° | The straight and right diagonal latches each read 50 u. Flip the splitter to miss the right latch. |
+| E22 **Twin Latches** | −45° and +45° | The upper mount lines up both diagonal latches at 50 u. Moving the socket down shifts both rays off their targets. |
+| E23 **Offset Latch** | −45° and +90° | The left diagonal and east wall latches each read 50 u. Mirroring swaps the sides. |
+| E24 **Return Fold** | −45° and +90° | The left latch takes 50 u directly. The upper latch takes 50 u after the mirror turns the east branch north. The other mount puts that turn under the screen. |
+| E25 **Split the Split** | 0° and +45° | The right latch takes 50 u. The stock splitter at the lower mount divides the remaining branch into the straight and east 25 u feeds. |
+| E26 **Split and Dim** | 0° and +45°, filter on the diagonal port | The 50 u straight latch and 25 u diagonal latch both accept. The bare splitter overloads the diagonal latch, and a filter on the straight port leaves that latch underpowered. |
+
+#### Wired Workbench sheets
+
+Both wired sheets open with an empty fabrication socket. **Insert part** lists saved blueprints with the required external ports. The fitted part earns the `paired-assembly` Solution Star when it passes every feed combination. The examples below use two modules. Larger designs earn the same star when their outputs match.
+
+| Sheet | Feeds | Example solution and acceptance checks |
+| --- | --- | --- |
+| E27 **Twin Release** | A 100 u, B 60 u | Wire A to Interlock input 1, B to input 2, and the Interlock output to Fan-out. Wire both branches to the outputs. Both read 50 u together. Either feed alone leaves both outputs at 0 u. |
+| E28 **Dimmed Release** | A 100 u, B 20 u | Wire A and B through the Interlock and put the 25 u pad on the 100 u path. Both feeds produce 75 u. Either feed alone leaves the output at 0 u. Putting the pad on B leaves the Interlock disabled. |
 
 ### Coverage, cable reach, and fan-out
 
@@ -149,7 +171,7 @@ The verified failures include unplugged feeds, out-of-range and wrong-channel re
 
 ## App fixture proofs · E06–E10
 
-The [fixture source](lib/endless_boards.dart) for revision 1 has SHA-256 `aed0de27daf29233ea21066483d5b0edc10367615f2c5400f59440e1a1a7b178`. The [wired evaluator](lib/signal_board.dart) has SHA-256 `ea05cc34dee67dbf0ef1df7edf29ddfc4effa9f5af8db1c80a821a5d013b96de`. The [optical evaluator](lib/optical_bay.dart) has SHA-256 `99bfb6d222c3f4db20cd3bb08c1c3e0fb8ea42a3861d63ac5d7f6c1cab081c46`.
+The [fixture source](lib/endless_boards.dart) for revision 1 has SHA-256 `aed0de27daf29233ea21066483d5b0edc10367615f2c5400f59440e1a1a7b178`. The [wired evaluator](lib/signal_board.dart) has SHA-256 `ea05cc34dee67dbf0ef1df7edf29ddfc4effa9f5af8db1c80a821a5d013b96de`. The [optical evaluator](lib/optical_bay.dart) has SHA-256 `f8f60f497722e4e4c663b42ff2160d7f12b8165c576a443e9a75a83e94d9f0b0`.
 
 The [exhaustive tests](test/endless_routing_test.dart) enumerate legal placements and every available lead type and destination from each output, including leaving the output open. They check one cable per socket, stock and corridor legality. A move can leave a formerly legal cable attached and unusable. Such a cable delivers zero and occupies stock, so removing it preserves the active route and cannot introduce a new winning signature on these fixtures. The optical search tries each legal mount and both diagonals per optic. The walkthrough also plays, saves and replays the fixtures through the game controls.
 
@@ -169,7 +191,7 @@ The [exhaustive tests](test/endless_routing_test.dart) enumerate legal placement
 
 ## App fixture proofs · E11–E20
 
-[Fixture source](lib/handoff_boards.dart) for revision 1 has SHA-256 `93f6659291adf52ffdb3692703f51a34967097963be12174faf7fa5dc0ead960`. The evaluator snapshot comprises [optics and directional radio](lib/optical_bay.dart) at `99bfb6d222c3f4db20cd3bb08c1c3e0fb8ea42a3861d63ac5d7f6c1cab081c46`, [wired signals](lib/signal_board.dart) at `13e15bd9946ee14f80c7ceb2b359f9c12e1512ca1bee4b5ffc14c027990524d8`, and [radio loss](lib/radio_propagation.dart) at `df600f986e57a4bcf1b93979d1e86ff22af89ba91a50567e7c8d550bbae04ac3`.
+[Fixture source](lib/handoff_boards.dart) for revision 1 has SHA-256 `93f6659291adf52ffdb3692703f51a34967097963be12174faf7fa5dc0ead960`. The evaluator snapshot comprises [optics and directional radio](lib/optical_bay.dart) at `f8f60f497722e4e4c663b42ff2160d7f12b8165c576a443e9a75a83e94d9f0b0`, [wired signals](lib/signal_board.dart) at `13e15bd9946ee14f80c7ceb2b359f9c12e1512ca1bee4b5ffc14c027990524d8`, and [radio loss](lib/radio_propagation.dart) at `df600f986e57a4bcf1b93979d1e86ff22af89ba91a50567e7c8d550bbae04ac3`.
 
 The [fixture tests](test/handoff_test.dart) check each legal authored mount and rotation. A converter’s aperture and radio direction change with its mount. E18 combines every optical arrangement with all 32 legal wired states, counting open sockets and legal lead assignments. Invalid installed leads occupy stock and deliver zero. Removing one leaves its active routes equivalent. The landscape walkthrough plays all ten sheets from the Endless path and verifies replay, save and star credit.
 

@@ -7,6 +7,8 @@ import 'drafting_controls.dart';
 import 'drafting_grid.dart';
 import 'drafting_parts.dart';
 import 'drafting_theme.dart';
+import 'fabrication_controls.dart';
+import 'fabrication_socket.dart';
 import 'game_audio.dart';
 import 'optical_bay.dart';
 import 'optical_deck.dart';
@@ -14,6 +16,7 @@ import 'part_guide.dart';
 import 'part_symbols.dart';
 import 'puzzle_console.dart';
 import 'sheet_style.dart';
+import 'splitter_blueprint.dart';
 
 class OpticalRoom extends StatefulWidget {
   const OpticalRoom({
@@ -24,6 +27,7 @@ class OpticalRoom extends StatefulWidget {
     required this.navigation,
     required this.onChange,
     this.revealedParts = const {},
+    this.openWorkbench,
     this.otherSectionSolved = true,
     this.otherSectionParts = const {},
   });
@@ -34,6 +38,11 @@ class OpticalRoom extends StatefulWidget {
   final PuzzleNavigation navigation;
   final ValueChanged<List<Optic>> onChange;
   final Set<GuidePart> revealedParts;
+  final Future<SplitterBlueprint?> Function(
+    FabricationSocket<SplitterBlueprint>, {
+    required bool insert,
+  })?
+  openWorkbench;
   final bool otherSectionSolved;
   final Set<GuidePart> otherSectionParts;
 
@@ -138,9 +147,31 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
     setState(() => _commit(optic.rotate(), BoardCue.turn));
   }
 
+  void _activate(Optic optic) {
+    if (optic.fabricationSocket != null && optic.blueprint == null) {
+      _fitBlueprint(optic);
+    } else {
+      _rotate(optic);
+    }
+  }
+
+  Future<void> _fitBlueprint(Optic optic, {bool insert = true}) async {
+    final socket = optic.fabricationSocket;
+    if (!_canEdit || socket == null) return;
+    final design = await widget.openWorkbench?.call(socket, insert: insert);
+    if (!mounted ||
+        !_canEdit ||
+        design == null ||
+        !socket.accepts(design) ||
+        design == optic.blueprint) {
+      return;
+    }
+    setState(() => _commit(optic.fit(design)));
+  }
+
   void _tap(OpticalDeckGeometry geometry, Offset pointer) {
     final optic = _hit(geometry, pointer);
-    if (optic != null) _rotate(optic);
+    if (optic != null) _activate(optic);
   }
 
   void _pick(OpticalDeckGeometry geometry, Offset pointer) {
@@ -203,6 +234,7 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     final idle = _held == null;
+    final sockets = _layout.where((optic) => optic.fabricationSocket != null);
     return PuzzleConsole(
       brief: widget.brief,
       navigation: widget.navigation,
@@ -216,7 +248,25 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
         onReset: idle ? _reset : null,
       ),
       playfield: _playfield(),
+      gridBounds: (size) => _geometry(size).floorRect,
       readings: _partsList(),
+      inventory: sockets.isEmpty || widget.openWorkbench == null
+          ? null
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              spacing: 5,
+              children: [
+                for (final optic in sockets)
+                  FabricationControls(
+                    label: sockets.length > 1 ? optic.id : null,
+                    empty: optic.blueprint == null,
+                    onWorkbench: _canEdit
+                        ? () => _fitBlueprint(optic, insert: false)
+                        : null,
+                    onInsert: _canEdit ? () => _fitBlueprint(optic) : null,
+                  ),
+              ],
+            ),
       canLeave: idle,
       onHelp: () => showPartGuide(
         context,
@@ -236,10 +286,13 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
     );
   }
 
+  OpticalDeckGeometry _geometry(Size size) =>
+      OpticalDeckGeometry(_level, size, fill: widget.openWorkbench == null);
+
   Widget _playfield() => DraftingPlayfield(
     aspectRatio: _playfieldAspectRatio,
     builder: (context, size) {
-      final geometry = OpticalDeckGeometry(_level, size, fill: true);
+      final geometry = _geometry(size);
       return Listener(
         // Flutter reports a cancelled, accepted pan through onPanEnd.
         onPointerCancel: (_) => _finishDrag(cancel: true),
@@ -264,7 +317,7 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
                 validDrop: _validDrop,
                 opened: _opened,
                 awardBounds: widget.brief.awardBounds.shift(
-                  Offset(draftingGridMargins.left, draftingGridMargins.top),
+                  geometry.floorRect.topLeft,
                 ),
               ),
               for (final optic in _layout) _semanticOptic(geometry, optic),
@@ -311,17 +364,29 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
     if (shown.converter case final converter?) {
       return _converterReading(index, shown, converter);
     }
-    final kind = shown.kind.label.toUpperCase();
+    final design = shown.blueprint;
+    final kind = design == null || design.mark.name.isEmpty
+        ? (design?.partName ?? optic.kind.label).toUpperCase()
+        : design.partName;
+    final emptySocket = shown.fabricationSocket != null && design == null;
+    final portAngles = design == null
+        ? null
+        : (shown.turned ? design.mirrored : design).label;
     return DraftingPartRow(
       number: '${opticPartNumber(_level, index)}',
-      name: kind,
-      state: optic.fixed
-          ? 'FIXED'
-          : 'AT ${opticalZone(_level, shown.position)}',
+      name: emptySocket ? 'WORKBENCH SOCKET' : kind,
+      state: emptySocket
+          ? 'EMPTY SOCKET'
+          : portAngles ??
+                (optic.fixed
+                    ? 'FIXED'
+                    : 'AT ${opticalZone(_level, shown.position)}'),
       symbol: OpticalPartSymbol.optic(
         shown.kind,
         turned: shown.turned,
         fixed: shown.fixed,
+        fitted: design != null,
+        mark: design?.mark.icon,
       ),
     );
   }
@@ -484,6 +549,8 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
     final p = geometry.project(optic.position);
     final converter = optic.converter;
     final canRotate = !optic.fixed && converter == null;
+    final emptySocket =
+        optic.fabricationSocket != null && optic.blueprint == null;
     final moves = <CustomSemanticsAction, VoidCallback>{
       if (_canEdit && _level.canMove(optic))
         for (final spot in _level.mounts[optic.id] ?? const <GridSpot>[])
@@ -502,12 +569,20 @@ class _OpticalRoomState extends State<OpticalRoom> with WidgetsBindingObserver {
       child: Semantics(
         label: converter != null
             ? 'Converter ${converter.requiredSource ?? optic.id}, channel ${converter.channel}'
+            : optic.blueprint != null
+            ? optic.blueprint!.partName
             : optic.fixed
             ? 'Fixed ${optic.kind.label.toLowerCase()}'
             : '${optic.kind.label} ${optic.id}',
-        button: canRotate,
-        hint: canRotate ? 'Rotate' : null,
-        onTap: canRotate && _canEdit ? () => _rotate(optic) : null,
+        button: canRotate || emptySocket,
+        hint: emptySocket
+            ? 'Insert fabricated part'
+            : canRotate
+            ? 'Rotate'
+            : null,
+        onTap: (canRotate || emptySocket) && _canEdit
+            ? () => _activate(optic)
+            : null,
         customSemanticsActions: moves,
         child: const SizedBox.expand(),
       ),

@@ -36,6 +36,11 @@ enum GuidePart {
     'Beam splitter',
     'Sends half the light straight through and turns the other half 90°.',
   ),
+  workbenchSplitter(
+    _PartCategory.optical,
+    'Workbench splitter',
+    'Fits a saved two-port blueprint. Each port takes half the incoming light. A filter halves its port’s share again. Tap to mirror the assembly.',
+  ),
   lightReceiver(
     _PartCategory.optical,
     'Light receiver',
@@ -147,6 +152,7 @@ Set<GuidePart> opticalGuideParts(OpticalLevel board) => {
     switch (optic.kind) {
       OpticKind.mirror => GuidePart.mirror,
       OpticKind.splitter => GuidePart.beamSplitter,
+      OpticKind.workbenchSplitter => GuidePart.workbenchSplitter,
       OpticKind.converter => GuidePart.opticalConverter,
     },
   if (board.receivers.length > board.alarms.length) GuidePart.lightReceiver,
@@ -337,6 +343,10 @@ Widget _symbol(GuidePart part) => switch (part) {
   GuidePart.laser => const OpticalPartSymbol.source(),
   GuidePart.mirror => const OpticalPartSymbol.optic(OpticKind.mirror),
   GuidePart.beamSplitter => const OpticalPartSymbol.optic(OpticKind.splitter),
+  GuidePart.workbenchSplitter => const OpticalPartSymbol.optic(
+    OpticKind.workbenchSplitter,
+    fitted: true,
+  ),
   GuidePart.lightReceiver => const OpticalPartSymbol.receiver(lit: true),
   GuidePart.opticalAlarm => const OpticalPartSymbol.receiver(
     lit: true,

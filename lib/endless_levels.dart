@@ -1,7 +1,9 @@
+import 'assembly.dart';
 import 'endless_boards.dart';
 import 'handoff_boards.dart';
 import 'signal_board_state.dart';
 import 'tutorial.dart';
+import 'workbench_boards.dart';
 
 typedef SolutionStar = ({String condition, bool earned});
 
@@ -126,6 +128,31 @@ final splitAroundBaffleLesson = OpticalLesson(
 
 const _signalRouting = EndlessGroup.signalRouting;
 
+const twinReleaseLesson = AssemblyLesson(
+  'endless.twin-release',
+  AssemblyFixture(feeds: [100, 60], targets: [50, 50]),
+  title: 'Twin Release',
+  objective: 'Power both outputs with either feed able to shut them off.',
+  goal: 'Fit a part with two inputs and two outputs. Deliver 50 u to each output with both inputs on. Both outputs must stay quiet when either input is off.',
+  notes: [
+    'An interlock forwards its first input while its second input has power.',
+    'A fan-out divides its input equally between two outputs.',
+    'Open Workbench to fabricate a part. Tap an output socket and then an input socket to wire it. Save the part and fit it to the puzzle.',
+  ],
+);
+
+const dimmedReleaseLesson = AssemblyLesson(
+  'endless.dimmed-release',
+  AssemblyFixture(feeds: [100, 20], targets: [75]),
+  title: 'Dimmed Release',
+  objective: 'Deliver 75 u with both feeds active.',
+  goal: 'Fit a part with two inputs and one output. Deliver 75 u with both inputs on. The output must stay quiet when either input is off.',
+  notes: [
+    'A 25 u pad subtracts 25 u down to zero.',
+    'The interlock needs power on both of its inputs.',
+  ],
+);
+
 enum EndlessLevel {
   antennaTest(_signalRouting, 1, 'Antenna Test'),
   edgeOfCoverage(_signalRouting, 2, 'Edge of Coverage', variantOf: 1),
@@ -146,7 +173,15 @@ enum EndlessLevel {
   crossedChannels(_signalRouting, 17, 'Crossed Channels'),
   serviceAndInspection(_signalRouting, 18, 'Service and Inspection'),
   oneMirrorTwoWindows(_signalRouting, 19, 'One Mirror, Two Windows'),
-  dualHandoff(_signalRouting, 20, 'Dual Handoff');
+  dualHandoff(_signalRouting, 20, 'Dual Handoff'),
+  diagonalLatch(_signalRouting, 21, 'Diagonal Latch'),
+  twinLatches(_signalRouting, 22, 'Twin Latches'),
+  offsetLatch(_signalRouting, 23, 'Offset Latch'),
+  returnFold(_signalRouting, 24, 'Return Fold'),
+  splitTheSplit(_signalRouting, 25, 'Split the Split'),
+  splitAndDim(_signalRouting, 26, 'Split and Dim'),
+  twinRelease(_signalRouting, 27, 'Twin Release'),
+  dimmedRelease(_signalRouting, 28, 'Dimmed Release');
 
   const EndlessLevel(this.group, this.number, this.title, {this.variantOf});
 
@@ -175,6 +210,14 @@ enum EndlessLevel {
     serviceAndInspection => serviceAndInspectionLesson,
     oneMirrorTwoWindows => oneMirrorTwoWindowsLesson,
     dualHandoff => dualHandoffLesson,
+    diagonalLatch => workbenchDiagonalLatch,
+    twinLatches => workbenchTwinLatches,
+    offsetLatch => workbenchOffsetLatch,
+    returnFold => workbenchReturnFold,
+    splitTheSplit => workbenchSplitTheSplit,
+    splitAndDim => workbenchSplitAndDim,
+    twinRelease => twinReleaseLesson,
+    dimmedRelease => dimmedReleaseLesson,
   };
 
   int get fixtureRevision => 1;
@@ -252,6 +295,13 @@ enum EndlessLevel {
       'paired-halves':
           'Deliver 50 u to each local sensor and 30 u to each paired remote.',
     },
+    diagonalLatch ||
+    twinLatches ||
+    offsetLatch ||
+    returnFold ||
+    splitTheSplit => {'custom-split': lesson!.goal},
+    splitAndDim => {'filtered-branch': lesson!.goal},
+    twinRelease || dimmedRelease => {'paired-assembly': lesson!.goal},
   };
 
   Iterable<String> get solutionIds => solutionConditions.keys;

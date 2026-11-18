@@ -8,7 +8,7 @@ Dark Port is an offline landscape puzzle game for iOS and Android. Players route
 
 **Endless is the current product and development focus.** It opens directly from the title screen on a fresh save. Ship authored puzzles in numbered groups, starting with Signal Routing. A group introduces a family of related mechanisms, gives each a chance to matter on its own, and then combines them in harder boards. The campaign comes later and will reuse the tested boards and components for the missing crew story, the Station Map and the station cycles.
 
-**Current build.** The Tutorial has eight required lessons across Sealed Bay and Test Line plus the optional Four-way fan-out branch. All 20 Signal Routing puzzles are playable in Endless with independent saves, replays and Solution Stars.
+**Current build.** The Tutorial has eight required lessons across Sealed Bay and Test Line plus the optional Four-way fan-out branch. The Workbench has a shared parts picker and blueprint library for optical splitters and wired assemblies, with a replayable splitter lesson. All 28 Signal Routing puzzles are playable in Endless with independent saves, replays and Solution Stars.
 
 **Status.** *Playable* means the board or part is in the mobile build. *Planned* means it has an assigned slot and still needs authoring or integration. *Trial* means it has a reserved slot and a mechanism to test before it graduates to the playable path. Slot numbers identify positions in Endless. The deferred campaign uses its own chapter and board numbers.
 
@@ -69,6 +69,14 @@ The six groups below assign the existing puzzle designs to Endless. Groups 2–6
 | 1.18 | **Service and Inspection** | **Playable.** Complete both the wired service and optical inspection circuits. Three verified cable corridors earn separate Solution Stars. |
 | 1.19 | **One Mirror, Two Windows** | **Playable.** Deliver opposing beams to their source-keyed converters. |
 | 1.20 | **Dual Handoff** | **Playable.** Solve both local sensors and both remote receivers with a shared mirror. |
+| 1.21 | **Diagonal Latch** | **Playable.** Fit the tutorial blueprint to deliver 50 u straight ahead and 50 u along a 45° branch. |
+| 1.22 | **Twin Latches** | **Playable.** Build a splitter with two 45° branches and choose the mount that lines up both latches. |
+| 1.23 | **Offset Latch** | **Playable.** Combine a 45° branch with a 90° branch. |
+| 1.24 | **Return Fold** | **Playable.** Reuse the mixed-angle splitter and reflect its side branch around a screen. |
+| 1.25 | **Split the Split** | **Playable.** Reserve 50 u for a diagonal latch and divide the straight branch into two 25 u feeds. |
+| 1.26 | **Split and Dim** | **Playable.** Fit a splitter core with a half-power filter on one port. The straight and diagonal latches require 50 u and 25 u respectively. |
+| 1.27 | **Twin Release** | **Playable.** Connect an interlock and a fan-out. Two live feeds enable both 50 u outputs. |
+| 1.28 | **Dimmed Release** | **Playable.** Connect an interlock and a 25 u pad. The output reaches 75 u while both feeds are live. |
 
 #### Group 2 · Wired Control and Workshop
 
@@ -184,7 +192,7 @@ These rules hold on every board. Groups introduce new parts while reusing these 
 
 | Mode | Used by | Behavior |
 | --- | --- | --- |
-| **On commit** | The Tutorial, Signal Routing 1.1–1.20, 2.1 Long Reach, and optics in Coherent Optics and Power | Every committed edit re-evaluates the route. Previews predict the result during a drag. A solved arrangement completes the board. |
+| **On commit** | The Tutorial, Signal Routing 1.1–1.28, 2.1 Long Reach, and optics in Coherent Optics and Power | Every committed edit re-evaluates the route. Previews predict the result during a drag. A solved arrangement completes the board. |
 | **On Send** | Fixtures that explicitly use Send. 2.2 Switchboard teaches ordered selector sends. | Edits change only the arrangement. **Send** evaluates once from the committed arrangement and applies its effects once. Each destination shows what arrived on the last send until the next edit or send. Inline readouts may preview the route before sending. |
 
 Devices resolve their same-send inputs together and then deliver downstream. Ordinary boards reject cycles.
@@ -196,8 +204,9 @@ Devices resolve their same-send inputs together and then deliver downstream. Ord
 ### Light
 
 - A laser sends a 100 u ray in its authored direction. Each leg needs a clear, straight sightline from the laser or previous optic. The ray stops at the first object or the board edge.
-- A **mirror** turns a ray 90° according to its diagonal and the incoming direction. Tap to change the diagonal.
+- A **mirror** reflects across its diagonal and preserves power. This turns an axis-aligned ray 90°. Tap to change the diagonal.
 - An **optical splitter** sends half the incident light straight and half along the turned direction.
+- A **Workbench splitter** sends one half along each of two authored directions. A half-power filter absorbs half of its port's share. With a vertical input, a 45° port moves one grid step sideways for each step forward. A latch checks the diagonal approach along with the delivered power.
 - A **baffle** blocks any ray that strikes it and occupies space.
 - A **light receiver** or **optical-to-radio converter** accepts a direct hit on its input aperture from the marked direction. A hit on the housing stops the ray. A laser casing, an antenna and the housing outside a mirror or splitter aperture also block light. Sealed Bay latches and the Alarm accept any reading above zero. Later sensors use a threshold or a dark condition.
 - Independent rays cross without interacting. Draw a gap at the crossing.
@@ -260,7 +269,37 @@ Optical beams and wired deliveries use separate evaluators. In group 4 the optic
 
 ## Workshop and reusable tools
 
-Blueprints are permanent local designs. Endless introduces the workshop at **2.6 Build a Splitter**. Its first visit uses a four-step primer. Pick a core, snap on a port, press Test to see the bench reading change, then press Save. **2.9 Build a Gate** uses the same controls. The future campaign can also add saved blueprints to the Station Map kit.
+### Workbench
+
+Open **Workbench** from the title screen or a compatible puzzle. On the title-screen bench, tap a mount or choose **Add part** to pick an optical splitter, Interlock, Fan-out or 25 u pad. In **Build**, select a part or socket on the sheet to turn it left or right. Parts turn in 90° steps and can be flipped. Sockets turn in 45° steps within the enclosure's allowed range. The Workbench uses the main puzzle parts list for inputs and output readings. **Blueprints**, beside **Tutorial**, lists both kinds of saved designs and previews the selected design before loading it. Puzzle workbenches offer blueprints that match the fixture type.
+
+Fabrication levels begin with an empty socket and the **Fabrication required** prompt. Open **Workbench** to build a part or **Insert part** to browse compatible saved designs. **Save blueprint** lets the player enter a part name and pick an icon. **Customize** creates a copy of a saved design with a different name or icon. **Fit to puzzle** places one part with its saved icon and lists its name in the puzzle's parts list.
+
+Each fabrication socket declares its blueprint type and interface. A compatible part can be fitted and replaced while the player tests the puzzle. The installed part's actual signals determine completion. Optical sheets use the normal ray tracer and require each fabrication mount to be filled. Wired fixtures specify input and output counts and can set output targets for individual combinations of live inputs.
+
+### Optical splitter
+
+Choose **Tutorial** from the title-screen Workbench. The first visit from a splitter puzzle also opens the tutorial if the player has yet to save a design that lights its two latches. Use the left and right controls to rotate the two ports in 45° steps and aim their arrows at the test latches. Press **Test** to see both 50 u rays, then save the design when both latches light. The **Tutorial** button also reopens the lesson.
+
+A two-port splitter accepts any two distinct output angles from −90°, −45°, 0°, +45° and +90° relative to the chassis, with positive values clockwise. Testing uses the same ray tracer as the puzzle sheets. Each port takes half the input and its ray can hit a baffle, another optic, a receiver with the matching approach or the board edge.
+
+In a splitter build, **Build** offers one **Half-power filter** that clips to either output of the splitter core. With 100 u in, the open port delivers 50 u and the filtered port delivers 25 u. The filter stays on its port when the player rotates the port. Test shows the measured power for each branch.
+
+The optical blueprint shows the splitter core and its filter inside the enclosure, with input and output sockets on the outline. Select the core to turn the chassis by 90°. Select a socket to change its direction in 45° steps. The input can face straight out of the rear wall or 45° to either side. An output can move around the forward half of the enclosure. Flip mirrors the ports and the input aim in the chassis. The free bench lets players remove and refit either output.
+
+Select the test laser and turn it to move the emission point around the enclosure in 45° steps. **Test** requires both outputs. A pulse reaches the splitter only when its beam can hit the input from the accepted direction. A baffle or a mismatched approach leaves both outputs dark. Output directions follow the chassis and their port settings. Blueprints save the chassis and input angles along with the outputs and filter. The **Blueprints** panel previews a saved design with an aligned test laser. In a compatible puzzle, **Fit to puzzle** installs the selected design. Tap the fitted splitter to mirror the assembly, or drag it when the sheet offers multiple mounts. The **Workbench sheets** shortcut in Signal Routing jumps to 1.21–1.28.
+
+### Wired assemblies
+
+Wired modules go on the Workbench’s nine mounts. The enclosure has space for up to three sockets on each side. Use the edge plus buttons to fit sockets and hold the last socket on either side to remove it. Authored sheets supply their sockets. Tap a mount to add a part, drag a part to another mount, or hold it to change or remove it. Select a part to turn it 90° or mirror its socket positions. Select an edge socket’s label to aim the socket straight out or 45° to either side. Moving, turning, and flipping preserve its connections. Tap an output socket and then an input socket to connect them. A socket holds one lead. Tap a test input row to switch that feed. Output rows show measured power and any fixture target. Blueprints save the sockets, their aims, the parts, and the leads.
+
+The **Interlock** forwards input 1 only while input 2 is powered. The **Fan-out** shares incoming power equally across its two outputs. The **25 u pad** subtracts 25 u, with a floor of zero. The authored wired sheets check every combination of live feeds. Any arrangement that fits the socket and delivers the required outputs earns the solution, including assemblies with extra internal modules.
+
+On a wired sheet, **Fit to puzzle** installs a blueprint with the required external sockets. The level shows a single housing with the part's name, icon, and sockets. Players can toggle the external feeds to test it and open **Workbench** to change the design.
+
+### Planned campaign and wired designs
+
+**2.6 Build a Splitter** adds a wired fan-out core. Pick a core, snap on a port, press Test to see the bench reading change, then press Save. **2.9 Build a Gate** uses the same controls. The future campaign can also add saved blueprints to the Station Map kit.
 
 Players collect compatible cores and ports on the group’s workshop and challenge boards. In the workshop they choose a core, add the ports that give it its behavior and test the assembled tool with sample inputs. The inspector shows valid combinations, how many inputs and outputs the build has, and what it sends. A saved design appears in the player’s tool library. On a puzzle board, the player places a design from the library on a clear placement node and wires it into the route.
 
@@ -317,8 +356,9 @@ Data         word source ○──[0 1 0 0]──○ matcher
 | Part | Status | Rule | Campaign board references | Reads as |
 | --- | --- | --- | --- | --- |
 | **Laser** | Playable | Fixed source. Sends a 100 u ray in its authored direction. On coherent benches its phase starts at 12 o’clock. | The only light source. Taught 1.1. Returns in all of chapter 7. | Aperture in a bolted housing, directional ray and `100 u` label. |
-| **Mirror** | Playable | Turns a ray 90° by its diagonal and the incoming direction. Tap to change the diagonal. Preserves phase. | The player’s steering tool. Taught 1.1. Returns 1.2, 1.3, 7.2, 7.5. | Round mount with a diagonal face. Bolts mark the anchored version. |
+| **Mirror** | Playable | Reflects a ray across its diagonal. Tap to change the diagonal. Preserves phase. | The player’s steering tool. Taught 1.1. Returns 1.2, 1.3, 7.2, 7.5. | Round mount with a diagonal face. Bolts mark the anchored version. |
 | **Optical splitter** | Playable | Half the light goes straight, half turns. A loose splitter rotates like a mirror. | Makes two goals from one beam. Taught 1.2. Returns 1.3 and as the coherent splitter. | Divided face with straight and turned exits. Dimmer rays and readings show both shares. |
+| **Workbench splitter** | Playable | Half the light leaves each configured port. Tap to mirror both angles. | Endless 1.21–1.25. | Diamond socket with a filled centre when a blueprint is fitted. The parts list shows the active port angles. |
 | **Light receiver** | Playable | Measures incident light from its authored approach. Latches and the Alarm accept anything above zero. Signal Routing 1.9 and 1.10 require exact power readings. | Every optical goal. Latch 1.1, Alarm 1.3, carrier sensor and relay port 7.1. | Slotted sensor, lit or dark, with reading and target. The telemetry names each latch and the Alarm. |
 | **Baffle** | Playable | Blocks light and occupies space. | Forces a route around. Appears 1.3 and 7.5. In chapter 7 it proves that blocking is not cancelling. | Solid hatched barrier. Mark the stop at the face where a path is blocked. |
 | **Delay plate** | Planned | Adds 0–3 quarter-steps of phase on a coherent path without changing the path. Bolted plates have an authored setting. | The one control that decides which exit is bright. Taught 7.1. Returns 7.3, 7.5. | Double ring with `+0` to `+3`. Show the phase hand and both outcome meters. |

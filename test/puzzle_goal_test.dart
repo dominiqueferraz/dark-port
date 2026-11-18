@@ -1,6 +1,7 @@
 import 'package:dark_port/drafting_theme.dart';
 import 'package:dark_port/endless_levels.dart';
 import 'package:dark_port/main.dart';
+import 'package:dark_port/optical_deck.dart';
 import 'package:dark_port/tutorial.dart';
 import 'package:dark_port/tutorial_progress.dart';
 import 'package:flutter/material.dart';
@@ -95,6 +96,17 @@ void main() {
             tester.getRect(row).bottom,
             closeTo(tester.getRect(title).bottom, .01),
           );
+          final awards = find.byKey(const ValueKey('blueprint-awards'));
+          final deck = find.byType(OpticalDeck);
+          if (awards.evaluate().isNotEmpty && deck.evaluate().length == 1) {
+            final floor = tester.widget<OpticalDeck>(deck).geometry.floorRect;
+            final corner = tester.getTopLeft(deck) + floor.topLeft;
+            expect(
+              tester.getTopLeft(awards),
+              within(distance: .01, from: corner + const Offset(5, 5)),
+              reason: lesson.title,
+            );
+          }
           expect(tester.takeException(), isNull, reason: lesson.title);
         }
 

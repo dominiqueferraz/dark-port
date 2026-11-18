@@ -4,10 +4,12 @@ import 'package:flutter/material.dart';
 
 import 'achievements.dart';
 import 'achievements_screen.dart';
+import 'assembly.dart';
 import 'drafting_controls.dart';
 import 'drafting_theme.dart';
 import 'endless_levels.dart';
 import 'endless_picker.dart';
+import 'fabrication_socket.dart';
 import 'game_audio.dart';
 import 'game_save.dart';
 import 'optical_bay.dart';
@@ -19,9 +21,11 @@ import 'puzzle_console.dart';
 import 'settings_screen.dart';
 import 'sheet_style.dart';
 import 'signal_room.dart';
+import 'splitter_blueprint.dart';
 import 'tutorial.dart';
 import 'tutorial_picker.dart';
 import 'tutorial_progress.dart';
+import 'workbench_screen.dart';
 
 class GameShell extends StatefulWidget {
   const GameShell({
@@ -148,6 +152,8 @@ class _GameShellState extends State<GameShell> {
       endlessBoards: _progress?.endlessBoards ?? {},
       endlessResults: _progress?.endlessResults ?? {},
       opened: _progress?.opened ?? {},
+      blueprints: _progress?.blueprints ?? {},
+      assemblies: _progress?.assemblies ?? {},
     );
     final saved = await _write(fresh);
     if (!mounted) return;
@@ -264,6 +270,39 @@ class _GameShellState extends State<GameShell> {
     _board = null;
   });
 
+  Future<SplitterBlueprint?> _openWorkbench({
+    FabricationSocket<SplitterBlueprint>? socket,
+    bool insert = false,
+  }) => Navigator.of(context).push<SplitterBlueprint>(
+    MaterialPageRoute(
+      builder: (_) => WorkbenchScreen(
+        blueprints: _progress?.blueprints ?? const {},
+        onSave: _saveBlueprint,
+        opticalSocket: socket,
+        startWithBlueprints: insert,
+        assemblies: _progress?.assemblies ?? const {},
+        onSaveAssembly: socket == null ? _saveAssembly : null,
+      ),
+    ),
+  );
+
+  Future<bool> _saveBlueprint(SplitterBlueprint design) =>
+      _saveWorkbench((progress) => progress.saveBlueprint(design));
+
+  Future<bool> _saveAssembly(AssemblyBlueprint design) =>
+      _saveWorkbench((progress) => progress.saveAssembly(design));
+
+  Future<bool> _saveWorkbench(
+    TutorialProgress Function(TutorialProgress) change,
+  ) async {
+    final previous = _progress ?? TutorialProgress(tutorialStarted: false);
+    final progress = change(previous);
+    if (identical(progress, previous)) return true;
+    if (!await _write(progress) || !mounted) return false;
+    setState(() => _progress = progress);
+    return true;
+  }
+
   Widget _lessonRoom(GameSave board) {
     final index = requiredLessons.indexOf(board.lesson);
     final progressing = !_replaying && index >= 0;
@@ -333,9 +372,26 @@ class _GameShellState extends State<GameShell> {
             if (wiredBoard != null) ...signalGuideParts(wiredBoard),
           },
           WiredLesson(:final board) => signalGuideParts(board),
+          AssemblyLesson() => const <GuidePart>{},
         },
     };
     switch (lesson) {
+      case AssemblyLesson():
+        return WorkbenchScreen(
+          key: ValueKey(_lessonSession),
+          blueprints: _progress?.blueprints ?? const {},
+          onSave: _saveBlueprint,
+          assemblies: _progress?.assemblies ?? const {},
+          onSaveAssembly: _saveAssembly,
+          fixture: lesson.fixture,
+          assembly: board.assembly,
+          assemblyInstalled: board.assemblyInstalled,
+          brief: brief,
+          onAssemblyChange: (design, {required installed}) => _changed(
+            GameSave(lesson, assembly: design, assemblyInstalled: installed),
+          ),
+          onBack: _showPicker,
+        );
       case OpticalLesson():
         final signal = board.signal;
         final optical = OpticalRoom(
@@ -344,6 +400,13 @@ class _GameShellState extends State<GameShell> {
           brief: brief,
           navigation: navigation,
           revealedParts: revealedParts,
+          openWorkbench:
+              lesson.board.initial.any(
+                (optic) => optic.fabricationSocket != null,
+              )
+              ? (socket, {required insert}) =>
+                    _openWorkbench(socket: socket, insert: insert)
+              : null,
           otherSectionSolved: signal?.solved ?? true,
           otherSectionParts: signal == null
               ? const {}
@@ -618,6 +681,7 @@ class _GameShellState extends State<GameShell> {
               ),
             ),
           ),
+          _action('Workbench', () => unawaited(_openWorkbench())),
         ],
       ],
       const SizedBox(height: 12),

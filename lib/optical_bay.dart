@@ -1,38 +1,53 @@
 import 'dart:math' as math;
 
+import 'fabrication_socket.dart';
 import 'placement_nodes.dart';
 import 'radio_propagation.dart';
+import 'splitter_blueprint.dart';
 
 typedef FloorPoint = math.Point<double>;
 
 enum BeamDirection {
   north(0, 1),
+  northEast(math.sqrt1_2, math.sqrt1_2),
   east(1, 0),
+  southEast(math.sqrt1_2, -math.sqrt1_2),
   south(0, -1),
-  west(-1, 0);
+  southWest(-math.sqrt1_2, -math.sqrt1_2),
+  west(-1, 0),
+  northWest(-math.sqrt1_2, math.sqrt1_2);
 
   const BeamDirection(this.x, this.y);
   final double x;
   final double y;
 
+  BeamDirection turn(int steps) => values[(index + steps) % values.length];
+
+  BeamDirection reflected(bool turned) =>
+      values[((turned ? 6 : 2) - index) % values.length];
+
   BeamDirection get opposite =>
       values[(index + values.length ~/ 2) % values.length];
-
-  BeamDirection reflected(bool turned) => switch (this) {
-    north => turned ? west : east,
-    east => turned ? south : north,
-    south => turned ? east : west,
-    west => turned ? north : south,
-  };
 }
 
 enum OpticKind {
   splitter('Splitter'),
   mirror('Mirror'),
+  workbenchSplitter('Workbench splitter'),
   converter('Optical-to-radio converter');
 
   const OpticKind(this.label);
   final String label;
+}
+
+extension SplitterFacing on SplitterBlueprint {
+  BeamDirection get forward => BeamDirection.north.turn(turns * 2);
+
+  BeamDirection inputDirection({bool mirrored = false}) =>
+      forward.turn(mirrored ? -inputAim.steps : inputAim.steps);
+
+  BeamDirection outputDirection(SplitterPort port, {bool mirrored = false}) =>
+      forward.turn(mirrored ? -port.steps : port.steps);
 }
 
 class Optic {
@@ -42,6 +57,7 @@ class Optic {
     this.position, {
     this.turned = false,
     this.fixed = false,
+    this.blueprint,
     this.converter,
   });
 
@@ -50,7 +66,11 @@ class Optic {
   final FloorPoint position;
   final bool turned;
   final bool fixed;
+  final SplitterBlueprint? blueprint;
   final OpticalConverter? converter;
+
+  FabricationSocket<SplitterBlueprint>? get fabricationSocket =>
+      kind == OpticKind.workbenchSplitter ? splitterFabricationSocket : null;
 
   Optic at(FloorPoint position) => Optic(
     id,
@@ -58,6 +78,7 @@ class Optic {
     position,
     turned: turned,
     fixed: fixed,
+    blueprint: blueprint,
     converter: converter,
   );
   Optic rotate() => Optic(
@@ -66,7 +87,16 @@ class Optic {
     position,
     turned: !turned,
     fixed: fixed,
+    blueprint: blueprint,
     converter: converter,
+  );
+  Optic fit(SplitterBlueprint design) => Optic(
+    id,
+    kind,
+    position,
+    turned: turned,
+    fixed: fixed,
+    blueprint: design,
   );
 }
 
@@ -315,6 +345,7 @@ class OpticalTrace {
     this.converterInputs = const {},
     this.radioHops = const [],
     this.radioReadings = const [],
+    this.fabricatedPartsInstalled = true,
   }) : segments = List.unmodifiable(segments),
        lit = Set.unmodifiable(lit);
 
@@ -323,6 +354,7 @@ class OpticalTrace {
   final Map<String, ConverterInput> converterInputs;
   final List<OpticalRadioHop> radioHops;
   final List<OpticalRadioReading> radioReadings;
+  final bool fabricatedPartsInstalled;
 
   double receivedPower(int receiver) => segments
       .where((beam) => beam.receiver == receiver)
@@ -357,6 +389,7 @@ class OpticalTrace {
   }
 
   bool solves(OpticalLevel level) =>
+      fabricatedPartsInstalled &&
       !interruptsAlarm(level) &&
       level.goal.every((index) => meetsGoal(level, index)) &&
       lit.intersection(level.dark).isEmpty &&
@@ -543,9 +576,14 @@ OpticalTrace traceOptics(OpticalLevel level, List<Optic> layout) {
     var blocked = false;
     final heading = FloorPoint(direction.x, direction.y);
 
-    void contact(double at, {int? sensor, Optic? optic}) {
+    void contact(
+      double at, {
+      int? sensor,
+      Optic? optic,
+      bool hitHousing = false,
+    }) {
       if (at > distance + _epsilon) return;
-      final opaque = sensor == null && optic == null;
+      final opaque = hitHousing || (sensor == null && optic == null);
       if (at >= distance - _epsilon &&
           (blocked || (!opaque && (hit != null || receiver != null)))) {
         return;
@@ -556,8 +594,10 @@ OpticalTrace traceOptics(OpticalLevel level, List<Optic> layout) {
       hit = optic;
     }
 
-    void opaque((double, double) bounds) {
-      if (_entry(bounds) case final entry?) contact(entry);
+    void opaque((double, double) bounds, {Optic? optic}) {
+      if (_entry(bounds) case final entry?) {
+        contact(entry, optic: optic, hitHousing: true);
+      }
     }
 
     void input(
@@ -611,7 +651,16 @@ OpticalTrace traceOptics(OpticalLevel level, List<Optic> layout) {
     }
 
     for (final optic in layout) {
-      if (optic.id == ray.previous) continue;
+      if (optic.id == ray.previous) {
+        continue;
+      }
+      if (optic.fabricationSocket != null && optic.blueprint == null) {
+        opaque(
+          _partBounds(ray, optic.position, OpticalLevel.opticRadius),
+          optic: optic,
+        );
+        continue;
+      }
       final offset = optic.position - origin;
       if (optic.converter case final converter?) {
         final lane = converter.lanes[optic.position];
@@ -619,6 +668,20 @@ OpticalTrace traceOptics(OpticalLevel level, List<Optic> layout) {
           input(optic.position, lane.incoming, optic: optic);
         } else {
           opaque(_partBounds(ray, optic.position, OpticalLevel.opticRadius));
+        }
+        continue;
+      }
+      if (optic.blueprint case final design?) {
+        final along = _dot(offset, heading);
+        if (direction == design.inputDirection(mirrored: optic.turned) &&
+            along > _epsilon &&
+            _cross(offset, heading).abs() <= _halfOptic) {
+          contact(along, optic: optic);
+        } else {
+          opaque(
+            _partBounds(ray, optic.position, OpticalLevel.opticRadius),
+            optic: optic,
+          );
         }
         continue;
       }
@@ -652,7 +715,7 @@ OpticalTrace traceOptics(OpticalLevel level, List<Optic> layout) {
     ));
     if (receiver case final accepted?) lit.add(accepted);
     final struck = hit;
-    if (struck == null || struck.converter != null) continue;
+    if (blocked || struck == null || struck.converter != null) continue;
     final state = (
       ray.source,
       struck.id,
@@ -663,15 +726,25 @@ OpticalTrace traceOptics(OpticalLevel level, List<Optic> layout) {
     if (!visited.add(state)) continue;
 
     final outputs = switch (struck.kind) {
-      OpticKind.mirror => [direction.reflected(struck.turned)],
-      OpticKind.splitter => [direction.reflected(struck.turned), direction],
-      OpticKind.converter => const <BeamDirection>[],
+      OpticKind.mirror => [(direction.reflected(struck.turned), 1.0)],
+      OpticKind.splitter => [
+        (direction.reflected(struck.turned), .5),
+        (direction, .5),
+      ],
+      OpticKind.workbenchSplitter => [
+        for (final port in struck.blueprint!.ports)
+          (
+            struck.blueprint!.outputDirection(port, mirrored: struck.turned),
+            struck.blueprint!.shareFor(port),
+          ),
+      ],
+      OpticKind.converter => const <(BeamDirection, double)>[],
     };
-    for (final output in outputs) {
+    for (final (output, share) in outputs) {
       pending.add((
         from: end,
         direction: output,
-        strength: ray.strength / outputs.length,
+        strength: ray.strength * share,
         previous: struck.id,
         source: ray.source,
       ));
@@ -690,6 +763,13 @@ OpticalTrace traceOptics(OpticalLevel level, List<Optic> layout) {
   return OpticalTrace(
     segments,
     lit,
+    fabricatedPartsInstalled: level.initial
+        .where((optic) => optic.fabricationSocket != null)
+        .every(
+          (mount) => layout.any(
+            (optic) => optic.id == mount.id && optic.blueprint != null,
+          ),
+        ),
     converterInputs: Map.unmodifiable(inputs),
     radioHops: List.unmodifiable(hops),
     radioReadings: List.unmodifiable([

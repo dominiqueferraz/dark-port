@@ -492,7 +492,7 @@ Future<void> playRoutingBoards(WidgetTester tester, GameStore store) async {
         (goal) => 'signal-goal-${goal.id}',
       ),
       OpticalLesson(:final board) => board.goal.map((id) => 'optical-goal-$id'),
-      null => const <String>[],
+      AssemblyLesson() || null => const <String>[],
     };
     for (final goal in goals) {
       final row = tester.getRect(find.byKey(ValueKey(goal)));
